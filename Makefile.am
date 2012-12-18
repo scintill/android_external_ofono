@@ -634,6 +634,9 @@ builtin_sources += plugins/bluez4.c plugins/bluez4.h
 builtin_modules += hfp_ag_bluez4
 builtin_sources += plugins/hfp_ag_bluez4.c plugins/bluez4.h
 
+builtin_modules += nettime
+builtin_sources += plugins/nettime.c
+
 builtin_sources += $(btio_sources)
 builtin_cflags += @BLUEZ_CFLAGS@
 builtin_libadd += @BLUEZ_LIBS@
