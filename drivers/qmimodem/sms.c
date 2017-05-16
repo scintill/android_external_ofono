@@ -334,6 +334,170 @@ error:
 	g_free(cbd);
 }
 
+static void delete_message(struct ofono_sms *sms, uint32_t message_id)
+{
+	struct qmi_param *param = qmi_param_new();
+	struct sms_data *data = ofono_sms_get_data(sms);
+
+	if (!param)
+		return;
+
+	DBG("remove message %08x", message_id);
+
+	qmi_param_append_uint8(param, QMI_WMS_PARAM_DELETE_STORAGE,
+			       QMI_WMS_STORAGE_TYPE_NV);
+	qmi_param_append_uint32(param, QMI_WMS_PARAM_DELETE_MESSAGE_INDEX,
+			       message_id);
+	qmi_param_append_uint8(param, QMI_WMS_PARAM_DELETE_MESSAGE_MODE,
+			 QMI_WMS_MESSAGE_MODE_GSMWCDMA);
+
+	if (qmi_service_send(data->wms, QMI_WMS_DELETE_MESSAGE, param,
+					NULL, NULL, NULL) > 0)
+		return;
+}
+
+struct read_message_data {
+	struct ofono_sms *sms;
+	uint32_t message_id;
+};
+
+static void read_message_cb(struct qmi_result *result, void *user_data)
+{
+	struct read_message_data *read_data = user_data;
+	const struct qmi_wms_raw_message *message;
+	uint16_t len;
+	uint16_t plen;
+
+	message = qmi_result_get(result, QMI_WMS_PARAM_RAW_READ_MESSAGE, &len);
+	if (!message)
+		return;
+
+	/* -1 comes from empty messages */
+	if (sizeof(*message) - 1 > len)
+		return;
+
+	plen = GUINT16_FROM_LE(message->count);
+	if (plen + 4 > len)
+		return;
+
+	switch (message->message_tag) {
+	case QMI_WMS_MESSAGE_TAG_TYPE_MT_NOT_READ:
+	case QMI_WMS_MESSAGE_TAG_TYPE_MT_READ:
+		ofono_sms_deliver_notify(read_data->sms,
+						message->data,
+						plen,
+						TPDU_UNKNOWN_WITH_SC);
+		break;
+	default:
+		break;
+	}
+
+	delete_message(read_data->sms, read_data->message_id);
+	g_free(read_data);
+}
+
+static void read_delete_message(struct ofono_sms *sms, uint32_t message_id)
+{
+	struct sms_data *data = ofono_sms_get_data(sms);
+	struct qmi_wms_result_new_msg_notify read_message;
+	struct qmi_param *param = NULL;
+	struct read_message_data *read_data = NULL;
+
+	DBG("");
+
+	read_data = g_try_new0(struct read_message_data, 1);
+	if (!read_data)
+		return;
+	read_data->sms = sms;
+	read_data->message_id = message_id;
+
+	param = qmi_param_new();
+	if (!param)
+		goto err;
+
+	read_message.storage_index = GUINT32_TO_LE(message_id);
+	read_message.storage_type = QMI_WMS_STORAGE_TYPE_NV;
+
+	if (!qmi_param_append(param, QMI_WMS_PARAM_RAW_READ_MESSAGE_ID,
+			       sizeof(read_message), &read_message))
+		goto err;
+	if (!qmi_param_append_uint8(param, QMI_WMS_PARAM_RAW_READ_MESSAGE_MODE,
+			 QMI_WMS_MESSAGE_MODE_GSMWCDMA))
+		goto err;
+
+	if (qmi_service_send(data->wms, QMI_WMS_RAW_READ, param,
+					read_message_cb, read_data, NULL) > 0)
+		return;
+err:
+	qmi_param_free(param);
+	g_free(read_data);
+}
+
+static void get_msg_list_cb(struct qmi_result *result, void *user_data)
+{
+	struct ofono_sms *sms = user_data;
+	const struct qmi_wms_message_list *list;
+	uint16_t len;
+	uint32_t num;
+	int i;
+
+	DBG("");
+
+	if (qmi_result_set_error(result, NULL))
+		return;
+
+	list = qmi_result_get(result, QMI_WMS_RESULT_MESSAGE_LIST, &len);
+	if (!list)
+		return;
+
+	num = GUINT32_FROM_LE(list->count);
+	if (num * sizeof(*list->message) + 4 > len) {
+		DBG("invalid length of the message list");
+		return;
+	}
+
+	DBG("found %d messages", num);
+
+	for (i = 0; i < num; i++) {
+		uint32_t index = GUINT32_FROM_LE(list->message[i].memory_index);
+
+		DBG("message %d tags %d", index, list->message[i].message_tag);
+		/* read messages, delete the message in the callback */
+		read_delete_message(sms, index);
+	}
+}
+
+static void list_messages(struct ofono_sms *sms, enum qmi_wms_message_tag tag)
+{
+	struct sms_data *data = ofono_sms_get_data(sms);
+	struct qmi_param *param;
+
+	DBG("");
+
+	param = qmi_param_new();
+	if (!param)
+		return;
+
+	if (!qmi_param_append_uint8(param,
+				QMI_WMS_PARAM_LIST_MESSAGE_STORAGE_TYPE,
+				QMI_WMS_STORAGE_TYPE_NV))
+		goto err;
+
+	if (!qmi_param_append_uint8(param, QMI_WMS_PARAM_LIST_MESSAGE_MODE,
+			       QMI_WMS_MESSAGE_MODE_GSMWCDMA))
+		goto err;
+
+	if (!qmi_param_append_uint8(param, QMI_WMS_PARAM_LIST_MESSAGE_TAG, tag))
+		goto err;
+
+	if (qmi_service_send(data->wms, QMI_WMS_GET_MSG_LIST, param,
+				get_msg_list_cb, sms, NULL) > 0)
+		return;
+err:
+	qmi_param_free(param);
+}
+
+
 static void event_notify(struct qmi_result *result, void *user_data)
 {
 	struct ofono_sms *sms = user_data;
@@ -369,6 +533,10 @@ static void set_routes_cb(struct qmi_result *result, void *user_data)
 
 	DBG("");
 
+	list_messages(sms, QMI_WMS_MESSAGE_TAG_TYPE_MT_READ);
+	list_messages(sms, QMI_WMS_MESSAGE_TAG_TYPE_MT_NOT_READ);
+	list_messages(sms, QMI_WMS_MESSAGE_TAG_TYPE_MO_SENT);
+	list_messages(sms, QMI_WMS_MESSAGE_TAG_TYPE_MO_NOT_SENT);
 	ofono_sms_register(sms);
 }
 
@@ -392,7 +560,6 @@ static void get_routes_cb(struct qmi_result *result, void *user_data)
 		goto done;
 
 	num = GUINT16_FROM_LE(list->count);
-
 	DBG("found %d routes", num);
 
 	for (i = 0; i < num; i++)

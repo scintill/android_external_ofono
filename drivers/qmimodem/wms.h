@@ -24,6 +24,8 @@
 #define QMI_WMS_SET_EVENT		1	/* Set new message conditions */
 
 #define QMI_WMS_RAW_SEND		32	/* Send a raw message */
+#define QMI_WMS_RAW_READ		34	/* Read a raw message */
+#define QMI_WMS_DELETE_MESSAGE		36	/* Delete a message */
 
 #define QMI_WMS_GET_MSG_LIST		49	/* Get list of messages from the device */
 #define QMI_WMS_SET_ROUTES		50	/* Set routes for message memory storage */
@@ -55,15 +57,60 @@ struct qmi_wms_param_message {
 } __attribute__((__packed__));
 #define QMI_WMS_RESULT_MESSAGE_ID		0x01	/* uint16 */
 
-/* Get list of messages from the device */
-#define QMI_WMS_PARAM_STORAGE_TYPE		0x01	/* uint8 */
-#define QMI_WMS_PARAM_MESSAGE_MODE		0x11	/* uint8 */
-
 #define QMI_WMS_STORAGE_TYPE_UIM		0
 #define QMI_WMS_STORAGE_TYPE_NV			1
 #define QMI_WMS_STORAGE_TYPE_UNKNOWN		2
 
 #define QMI_WMS_MESSAGE_MODE_GSMWCDMA		1
+
+#define QMI_WMS_RESULT_MESSAGE_LIST		0x01
+struct qmi_wms_message_list {
+	uint32_t count;
+	struct {
+		uint32_t memory_index;
+		uint8_t message_tag;
+	} __attribute__((__packed__)) message[0];
+} __attribute__((__packed__));
+
+enum qmi_wms_message_tag {
+	QMI_WMS_MESSAGE_TAG_TYPE_MT_READ     = 0x00,
+	QMI_WMS_MESSAGE_TAG_TYPE_MT_NOT_READ = 0x01,
+	QMI_WMS_MESSAGE_TAG_TYPE_MO_SENT     = 0x02,
+	QMI_WMS_MESSAGE_TAG_TYPE_MO_NOT_SENT = 0x03
+};
+
+/* read a message */
+enum qmi_wms_param_read_message_req {
+	QMI_WMS_PARAM_RAW_READ_MESSAGE_ID	= 0x01,
+	QMI_WMS_PARAM_RAW_READ_MESSAGE_MODE	= 0x10,
+};
+enum qmi_wms_param_read_message_res {
+	QMI_WMS_PARAM_RAW_READ_MESSAGE	= 0x01,
+};
+struct qmi_wms_raw_message {
+	uint8_t message_tag;
+	uint8_t message_format;
+	uint16_t count;
+	uint8_t data[0];
+} __attribute__((__packed__));
+
+/* delete a message */
+enum qmi_wms_params_delete_req {
+	QMI_WMS_PARAM_DELETE_STORAGE		= 0x01,
+	QMI_WMS_PARAM_DELETE_MESSAGE_INDEX	= 0x10,
+	QMI_WMS_PARAM_DELETE_MESSAGE_MODE	= 0x12,
+};
+
+/* Get list of messages from the device response */
+enum qmi_wms_params_list_message_req {
+	QMI_WMS_PARAM_LIST_MESSAGE_STORAGE_TYPE	= 0x01,
+	QMI_WMS_PARAM_LIST_MESSAGE_TAG		= 0x11,
+	QMI_WMS_PARAM_LIST_MESSAGE_MODE		= 0x12,
+};
+
+enum qmi_wms_params_list_message_res {
+	QMI_WMS_PARAM_LIST_MESSAGE_LIST		= 0x01,
+};
 
 /* Get routes for message memory storage */
 #define QMI_WMS_RESULT_ROUTE_LIST		0x01
