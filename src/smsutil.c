@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include <glib.h>
+#include <ofono/sms.h>
 
 #include "util.h"
 #include "storage.h"
@@ -1545,7 +1546,12 @@ gboolean sms_decode(const unsigned char *pdu, int len, gboolean outgoing,
 
 	memset(out, 0, sizeof(*out));
 
-	if (tpdu_len < len) {
+	if (tpdu_len == TPDU_UNKNOWN_WITH_SC) {
+		/* unknown TPDU length but prefixed with SC */
+		sms_decode_address_field(pdu, len, &offset, TRUE,
+				&out->sc_addr);
+		tpdu_len = len - offset;
+	} else if (tpdu_len < len) {
 		if (!sms_decode_address_field(pdu, len, &offset,
 						TRUE, &out->sc_addr))
 			return FALSE;
