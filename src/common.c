@@ -736,3 +736,17 @@ void ofono_call_init(struct ofono_call *call)
 	call->cnap_validity = CNAP_VALIDITY_NOT_AVAILABLE;
 	call->clip_validity = CLIP_VALIDITY_NOT_AVAILABLE;
 }
+
+gint ofono_call_compare(gconstpointer a, gconstpointer b)
+{
+	const struct ofono_call *ca = a;
+	const struct ofono_call *cb = b;
+
+	if (ca->id < cb->id)
+		return -1;
+
+	if (ca->id > cb->id)
+		return 1;
+
+	return 0;
+}
