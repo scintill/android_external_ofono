@@ -24,10 +24,10 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 	LOCAL_MODULE := ofonod
 
-	# make -f (printf 'printvars:\n\t @echo $(AM_CFLAGS) $(CFLAGS) $(DEFS) $(AM_CPPFLAGS) $(CPPFLAGS)' | psub) -f Makefile
+	# make -f (printf 'printvars:\n\t @echo $(COMPILE)' | psub) -f Makefile
+
 	LOCAL_CFLAGS := -DOFONO_PLUGIN_BUILTIN -DPLUGINDIR=\"/system/lib/ofono/plugins\" -Wall -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -DHAVE_CONFIG_H
 
-	# make -f (printf 'printvars:\n\t @echo $(AM_CPPFLAGS) $(CPPFLAGS)' | psub) -f Makefile
 	LOCAL_C_INCLUDES := $(LOCAL_PATH) $(LOCAL_PATH)/include $(LOCAL_PATH)/src $(LOCAL_PATH)/gdbus $(LOCAL_PATH)/gisi $(LOCAL_PATH)/gatchat $(LOCAL_PATH)/btio $(LOCAL_PATH)/gril
 
 	# make -f (printf 'printvars:\n\t @echo $(src_ofonod_OBJECTS) $(gdbus_libgdbus_internal_la_OBJECTS)' | psub) -f Makefile | sed 's/\.l\?o/.c/g' | xargs -n 1 echo | sort | xargs echo | fmt | sed 's/$/ \\\\/'
@@ -71,3 +71,31 @@ include $(CLEAR_VARS)
 
 	LOCAL_C_INCLUDES += external/glib external/glib/glib external/dbus
 include $(BUILD_EXECUTABLE)
+
+## symlink .h files so the .c files can #include <ofono/X.h> . This is done in Makefile.am
+# make -f (printf 'printvars:\n\t @echo $(BUILT_SOURCES)' | psub) -f Makefile
+ofonod: $(addprefix $(LOCAL_PATH)/, \
+		include/ofono/log.h include/ofono/plugin.h include/ofono/history.h \
+		include/ofono/dbus.h include/ofono/modem.h include/ofono/types.h \
+		include/ofono/call-barring.h include/ofono/call-forwarding.h \
+		include/ofono/call-meter.h include/ofono/call-settings.h \
+		include/ofono/phonebook.h include/ofono/ussd.h include/ofono/sms.h \
+		include/ofono/sim.h include/ofono/message-waiting.h \
+		include/ofono/netreg.h include/ofono/voicecall.h include/ofono/devinfo.h \
+		include/ofono/cbs.h include/ofono/call-volume.h include/ofono/gprs.h \
+		include/ofono/gprs-context.h include/ofono/radio-settings.h \
+		include/ofono/stk.h include/ofono/audio-settings.h include/ofono/nettime.h \
+		include/ofono/ctm.h include/ofono/cdma-voicecall.h \
+		include/ofono/cdma-sms.h include/ofono/sim-auth.h \
+		include/ofono/gprs-provision.h include/ofono/emulator.h \
+		include/ofono/location-reporting.h include/ofono/cdma-connman.h \
+		include/ofono/gnss.h include/ofono/private-network.h \
+		include/ofono/cdma-netreg.h include/ofono/cdma-provision.h \
+		include/ofono/handsfree.h include/ofono/handsfree-audio.h \
+		include/ofono/siri.h include/ofono/netmon.h include/ofono/lte.h \
+		include/ofono/version.h \
+		)
+
+$(LOCAL_PATH)include/ofono/%.h: $(LOCAL_PATH)/include/%.h
+	$(hide) mkdir -p include/ofono
+	$(hide) ln -s $< $@
