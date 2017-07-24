@@ -184,7 +184,13 @@ int main(int argc, char **argv)
 #endif
 
 	context = g_option_context_new(NULL);
+#ifndef __ANDROID__
 	g_option_context_add_main_entries(context, options, NULL);
+#else
+	/* no gettext available */
+	g_option_context_set_main_group(context, g_option_group_new (NULL, NULL, NULL, NULL, NULL));
+	g_option_group_add_entries (g_option_context_get_main_group(context), options);
+#endif
 
 	if (g_option_context_parse(context, &argc, &argv, &err) == FALSE) {
 		if (err != NULL) {

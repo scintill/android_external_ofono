@@ -8,7 +8,6 @@ Makefile
 Makefile.in
 aclocal.m4
 config.guess
-config.h
 config.h.in
 config.log
 config.status
@@ -27,8 +26,6 @@ test-suite.log
 
 ofono.pc
 include/ofono
-include/version.h
-src/builtin.h
 src/ofonod
 src/ofono.service
 dundee/dundee

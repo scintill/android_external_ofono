@@ -28,6 +28,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#ifdef __ANDROID__
+#include "android/glibc.h"
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
