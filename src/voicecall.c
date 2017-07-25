@@ -401,7 +401,7 @@ static void append_voicecall_properties(struct voicecall *v,
 	ofono_bool_t mpty;
 	dbus_bool_t emergency_call;
 
-	status = call_status_to_string(call->status);
+	status = ofono_call_status_to_string(call->status);
 
 	ofono_dbus_dict_append(dict, "State", DBUS_TYPE_STRING, &status);
 
@@ -900,7 +900,7 @@ static void voicecall_set_call_status(struct voicecall *call, int status)
 
 	call->call->status = status;
 
-	status_str = call_status_to_string(status);
+	status_str = ofono_call_status_to_string(status);
 	path = voicecall_build_path(call->vc, call->call);
 
 	ofono_dbus_signal_property_changed(conn, path,
