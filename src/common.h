@@ -186,3 +186,4 @@ const char *packet_bearer_to_string(int bearer);
 gboolean is_valid_apn(const char *apn);
 
 gint ofono_call_compare(gconstpointer a, gconstpointer b);
+const char *ofono_call_status_to_string(enum call_status status);

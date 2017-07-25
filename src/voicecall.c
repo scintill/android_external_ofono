@@ -174,26 +174,6 @@ static const char *disconnect_reason_to_string(enum ofono_disconnect_reason r)
 	}
 }
 
-static const char *call_status_to_string(int status)
-{
-	switch (status) {
-	case CALL_STATUS_ACTIVE:
-		return "active";
-	case CALL_STATUS_HELD:
-		return "held";
-	case CALL_STATUS_DIALING:
-		return "dialing";
-	case CALL_STATUS_ALERTING:
-		return "alerting";
-	case CALL_STATUS_INCOMING:
-		return "incoming";
-	case CALL_STATUS_WAITING:
-		return "waiting";
-	default:
-		return "disconnected";
-	}
-}
-
 static const char *phone_and_clip_to_string(const struct ofono_phone_number *n,
 						int clip_validity)
 {
@@ -421,7 +401,7 @@ static void append_voicecall_properties(struct voicecall *v,
 	ofono_bool_t mpty;
 	dbus_bool_t emergency_call;
 
-	status = call_status_to_string(call->status);
+	status = ofono_call_status_to_string(call->status);
 
 	ofono_dbus_dict_append(dict, "State", DBUS_TYPE_STRING, &status);
 
@@ -920,7 +900,7 @@ static void voicecall_set_call_status(struct voicecall *call, int status)
 
 	call->call->status = status;
 
-	status_str = call_status_to_string(status);
+	status_str = ofono_call_status_to_string(status);
 	path = voicecall_build_path(call->vc, call->call);
 
 	ofono_dbus_signal_property_changed(conn, path,
