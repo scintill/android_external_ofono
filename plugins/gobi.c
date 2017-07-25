@@ -318,6 +318,16 @@ static void discover_cb(uint8_t count, const struct qmi_version *list,
 						create_dms_cb, modem, NULL);
 }
 
+static void sync_cb(void *user_data)
+{
+	struct ofono_modem *modem = user_data;
+	struct gobi_data *data = ofono_modem_get_data(modem);
+
+	DBG("modem in sync");
+
+	qmi_device_discover(data->device, discover_cb, modem, NULL);
+}
+
 static int gobi_enable(struct ofono_modem *modem)
 {
 	struct gobi_data *data = ofono_modem_get_data(modem);
@@ -345,7 +355,7 @@ static int gobi_enable(struct ofono_modem *modem)
 
 	qmi_device_set_close_on_unref(data->device, true);
 
-	qmi_device_discover(data->device, discover_cb, modem, NULL);
+	qmi_device_sync(data->device, sync_cb, modem);
 
 	return -EINPROGRESS;
 }
