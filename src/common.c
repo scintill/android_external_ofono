@@ -762,6 +762,20 @@ gint ofono_call_compare_by_status(gconstpointer a, gconstpointer b)
 	return 0;
 }
 
+gint ofono_call_compare_by_id(gconstpointer a, gconstpointer b)
+{
+	const struct ofono_call *call = a;
+	unsigned int id = GPOINTER_TO_UINT(b);
+
+	if (id < call->id)
+		return -1;
+
+	if (id > call->id)
+		return 1;
+
+	return 0;
+}
+
 const char *ofono_call_status_to_string(enum call_status status)
 {
 	switch (status) {
