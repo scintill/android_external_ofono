@@ -37,6 +37,7 @@
 
 #include <ofono/log.h>
 
+#include "qmibridge.h"
 #include "qmi.h"
 #include "ctl.h"
 
@@ -651,6 +652,8 @@ static gboolean can_write_data(GIOChannel *channel, GIOCondition cond,
 	__debug_msg(' ', req->buf, bytes_written,
 				device->debug_func, device->debug_data);
 
+	qmibridge_decode_req(req->buf, req->len);
+
 	hdr = req->buf;
 
 	if (hdr->service == QMI_SERVICE_CONTROL)
@@ -838,6 +841,7 @@ static gboolean received_data(GIOChannel *channel, GIOCondition cond,
 	__hexdump('<', buf, bytes_read,
 				device->debug_func, device->debug_data);
 
+	qmibridge_decode_read(buf, bytes_read);
 	offset = 0;
 
 	while (offset < bytes_read) {
