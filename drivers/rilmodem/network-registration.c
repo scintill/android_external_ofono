@@ -425,7 +425,7 @@ static void ril_cops_cb(struct ril_msg *message, gpointer user_data)
 	g_ril_init_parcel(message, &rilp);
 
 	num_params = parcel_r_int32(&rilp);
-	if (num_params != 3) {
+	if (num_params < 3) {
 		ofono_error("%s: invalid OPERATOR reply: "
 				"number of params is %d; should be 3.",
 				__func__,
