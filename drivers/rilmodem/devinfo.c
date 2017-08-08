@@ -88,6 +88,17 @@ static void ril_query_revision(struct ofono_devinfo *info,
 	GRil *ril = ofono_devinfo_get_data(info);
 	struct cb_data *cbd = cb_data_new(cb, data, ril);
 
+	{
+		struct parcel rilp;
+		parcel_init(&rilp);
+		parcel_w_int32(&rilp, 1);	/* Number of params */
+		parcel_w_int32(&rilp, TRUE);
+
+		g_ril_append_print_buf(ril, "(%d)", TRUE);
+
+		g_ril_send(ril, RIL_REQUEST_SCREEN_STATE, &rilp, NULL, NULL, NULL);
+	}
+
 	if (g_ril_send(ril, RIL_REQUEST_BASEBAND_VERSION, NULL,
 			query_revision_cb, cbd, g_free) > 0)
 		return;
