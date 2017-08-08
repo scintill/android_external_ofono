@@ -74,7 +74,7 @@ include $(BUILD_EXECUTABLE)
 
 ## symlink .h files so the .c files can #include <ofono/X.h> . This is done in Makefile.am
 # make -f (printf 'printvars:\n\t @echo $(BUILT_SOURCES)' | psub) -f Makefile
-ofonod: $(addprefix $(LOCAL_PATH)/, \
+$(addprefix $(LOCAL_PATH)/, $(LOCAL_SRC_FILES)): $(addprefix $(LOCAL_PATH)/, \
 		include/ofono/log.h include/ofono/plugin.h include/ofono/history.h \
 		include/ofono/dbus.h include/ofono/modem.h include/ofono/types.h \
 		include/ofono/call-barring.h include/ofono/call-forwarding.h \
@@ -96,6 +96,6 @@ ofonod: $(addprefix $(LOCAL_PATH)/, \
 		include/ofono/version.h \
 		)
 
-$(LOCAL_PATH)include/ofono/%.h: $(LOCAL_PATH)/include/%.h
-	$(hide) mkdir -p include/ofono
-	$(hide) ln -s $< $@
+$(LOCAL_PATH)/include/ofono/%.h: $(LOCAL_PATH)/include/%.h
+	$(hide) mkdir -p $(shell dirname $@)
+	$(hide) ln -s $(realpath $<) $@
