@@ -70,6 +70,8 @@ include $(CLEAR_VARS)
 	LOCAL_SHARED_LIBRARIES := libglib libdbus libdl
 
 	LOCAL_C_INCLUDES += external/glib external/glib/glib external/dbus
+
+	LOCAL_LDFLAGS := -Wl,--wrap=bsearch
 include $(BUILD_EXECUTABLE)
 
 ## symlink .h files so the .c files can #include <ofono/X.h> . This is done in Makefile.am
