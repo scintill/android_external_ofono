@@ -294,3 +294,51 @@ strchrnul (const char *s, int c_in)
   /* This should never happen.  */
   return NULL;
 }
+
+
+
+/* Perform binary search - inline version.
+   Copyright (C) 1991-2013 Free Software Foundation, Inc.
+   This file is part of the GNU C Library.
+
+   The GNU C Library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
+
+   The GNU C Library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public
+   License along with the GNU C Library; if not, see
+   <http://www.gnu.org/licenses/>.  */
+/* from https://sourceware.org/git/?p=glibc.git;a=blob_plain;f=bits/stdlib-bsearch.h;h=4cb58abe6c8a944cae5b5703664306d759febb9c;hb=41eda41d7489a428abb46202482136a540ec23dc */
+/* Android has this one, but it asserts that key != null, which breaks us. A linker flag is used in Android.mk to link to this instead of bionic's */
+
+void *
+__wrap_bsearch (const void *__key, const void *__base, size_t __nmemb, size_t __size,
+	 int (*__compar)(const void *, const void *))
+{
+  size_t __l, __u, __idx;
+  const void *__p;
+  int __comparison;
+
+  __l = 0;
+  __u = __nmemb;
+  while (__l < __u)
+    {
+      __idx = (__l + __u) / 2;
+      __p = (void *) (((const char *) __base) + (__idx * __size));
+      __comparison = (*__compar) (__key, __p);
+      if (__comparison < 0)
+	__u = __idx;
+      else if (__comparison > 0)
+	__l = __idx + 1;
+      else
+	return (void *) __p;
+    }
+
+  return NULL;
+}
