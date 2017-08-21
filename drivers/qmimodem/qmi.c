@@ -1166,11 +1166,6 @@ static void discover_callback(uint16_t message, uint16_t length,
 
 	service_list = ptr + *((uint8_t *) ptr) + 1;
 
-	for (i = 0; i < service_list->count; i++) {
-		if (service_list->services[i].type == QMI_SERVICE_CONTROL)
-			continue;
-	}
-
 done:
 	device->version_list = list;
 	device->version_count = count;
