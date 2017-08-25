@@ -65,13 +65,16 @@ include $(CLEAR_VARS)
 		src/stkutil.c src/storage.c src/ussd.c src/util.c src/voicecall.c \
 		src/watch.c \
 		\
-		android/glibc.c
+		android/glibc.c android/log.c
 
-	LOCAL_SHARED_LIBRARIES := libglib libdbus libdl
+	LOCAL_SHARED_LIBRARIES := libglib libdbus libdl liblog
 
 	LOCAL_C_INCLUDES += external/glib external/glib/glib external/dbus
 
-	LOCAL_LDFLAGS := -Wl,--wrap=bsearch
+	LOCAL_LDFLAGS := \
+		-Wl,--wrap=bsearch \
+		-Wl,--wrap=vsyslog -Wl,--wrap=syslog \
+
 include $(BUILD_EXECUTABLE)
 
 ## symlink .h files so the .c files can #include <ofono/X.h> . This is done in Makefile.am
