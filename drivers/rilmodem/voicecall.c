@@ -438,9 +438,11 @@ static void dial(struct ofono_voicecall *vc,
 	parcel_w_string(&rilp, phone_number_to_string(ph));
 	/* CLIR mode */
 	parcel_w_int32(&rilp, clir);
+	parcel_w_int32(&rilp, 0); /* call type */
+	parcel_w_int32(&rilp, 1); /* call domain */
+	parcel_w_string(&rilp, ""); /* csvfromextras */
 	/* USS, empty string */
 	/* TODO: Deal with USS properly */
-	parcel_w_int32(&rilp, 0);
 	parcel_w_int32(&rilp, 0);
 
 	g_ril_append_print_buf(vd->ril, "(%s,%d,0,0)",
