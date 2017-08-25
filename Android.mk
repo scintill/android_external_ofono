@@ -27,6 +27,7 @@ include $(CLEAR_VARS)
 	# make -f (printf 'printvars:\n\t @echo $(COMPILE)' | psub) -f Makefile
 
 	LOCAL_CFLAGS := -DOFONO_PLUGIN_BUILTIN -DPLUGINDIR=\"/system/lib/ofono/plugins\" -Wall -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -DHAVE_CONFIG_H
+	LOCAL_CFLAGS += -g
 
 	LOCAL_C_INCLUDES := $(LOCAL_PATH) $(LOCAL_PATH)/include $(LOCAL_PATH)/src $(LOCAL_PATH)/gdbus $(LOCAL_PATH)/gisi $(LOCAL_PATH)/gatchat $(LOCAL_PATH)/btio $(LOCAL_PATH)/gril
 
