@@ -1174,6 +1174,8 @@ static const GDBusMethodTable sms_manager_methods[] = {
 static const GDBusSignalTable sms_manager_signals[] = {
 	{ GDBUS_SIGNAL("PropertyChanged",
 			GDBUS_ARGS({ "name", "s" }, { "value", "v" })) },
+	{ GDBUS_SIGNAL("IncomingPdu",
+			GDBUS_ARGS({ "pdu", "ay" }, { "tpdu_len", "y"})) },
 	{ GDBUS_SIGNAL("IncomingMessage",
 			GDBUS_ARGS({ "message", "s" }, { "info", "a{sv}" })) },
 	{ GDBUS_SIGNAL("ImmediateMessage",
@@ -1330,6 +1332,32 @@ static void dispatch_text_message(struct ofono_sms *sms,
 
 	__ofono_history_sms_received(modem, uuid, str, &remote, &local,
 					message);
+}
+
+static void sms_pdu_notify(struct ofono_sms *sms,
+						   const unsigned char *pdu,
+						   guint8 pdu_len, guint8 tpdu_len)
+{
+	DBusMessage *signal;
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = __ofono_atom_get_path(sms->atom);
+	DBusMessageIter iter, array;
+
+	signal = dbus_message_new_signal(path, OFONO_MESSAGE_MANAGER_INTERFACE,
+									 "IncomingPdu");
+
+	if (signal == NULL)
+		return;
+
+	dbus_message_iter_init_append(signal, &iter);
+
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, DBUS_TYPE_BYTE_AS_STRING, &array);
+	dbus_message_iter_append_fixed_array(&array, DBUS_TYPE_BYTE, &pdu, pdu_len);
+	dbus_message_iter_close_container(&iter, &array);
+
+	dbus_message_iter_append_basic(&iter, DBUS_TYPE_BYTE, &tpdu_len);
+
+	g_dbus_send_message(conn, signal);
 }
 
 static void sms_dispatch(struct ofono_sms *sms, GSList *sms_list)
@@ -1525,6 +1553,8 @@ void ofono_sms_deliver_notify(struct ofono_sms *sms, const unsigned char *pdu,
 	struct sms s;
 	enum sms_class cls;
 
+	sms_pdu_notify(sms, pdu, len, tpdu_len);
+
 	DBG("len %d tpdu len %d", len, tpdu_len);
 
 	if (!sms_decode(pdu, len, FALSE, tpdu_len, &s)) {
@@ -1668,6 +1698,8 @@ void ofono_sms_status_notify(struct ofono_sms *sms, const unsigned char *pdu,
 {
 	struct sms s;
 	enum sms_class cls;
+
+	sms_pdu_notify(sms, pdu, len, tpdu_len);
 
 	DBG("len %d tpdu len %d", len, tpdu_len);
 
