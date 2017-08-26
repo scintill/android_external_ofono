@@ -73,6 +73,13 @@ Signals		PropertyChanged(string name, variant value)
 			New incoming text SMS received. Info has Sender,
 			LocalSentTime, and SentTime information.
 
+		IncomingPdu(array{byte} pdu, uint8 tpdu_len)
+
+			New incoming SMS PDU received. tpdu_len is the length of the
+			data after the SMSC addr. All PDUs are signaled, which may
+			mean some of these signals will overlap with content provided by
+			IncomingMessage, and that this may provide SMSs that IncomingMessage does not.
+
 		MessageAdded(object path, dict properties)
 
 			This signal is emitted whenever a new Message object
