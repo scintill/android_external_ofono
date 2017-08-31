@@ -26,6 +26,7 @@ test-suite.log
 
 ofono.pc
 include/ofono
+src/builtin.h
 src/ofonod
 src/ofono.service
 dundee/dundee
