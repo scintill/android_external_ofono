@@ -78,8 +78,9 @@ include $(CLEAR_VARS)
 			drivers/qmimodem/qmi.c drivers/qmimodem/qmimodem.c \
 			drivers/qmimodem/radio-settings.c drivers/qmimodem/sim.c \
 			drivers/qmimodem/sim-legacy.c drivers/qmimodem/sms.c \
-			drivers/qmimodem/ussd.c drivers/qmimodem/voicecall.c plugins/gobi.c
-		OFONO_PLUGINS += gobi qmimodem
+			drivers/qmimodem/ussd.c drivers/qmimodem/voicecall.c plugins/gobi.c \
+			plugins/gobidev.c
+		OFONO_PLUGINS += gobidev gobi qmimodem
 	endif
 
 	LOCAL_SHARED_LIBRARIES := libglib libdbus libdl liblog
@@ -93,6 +94,7 @@ include $(CLEAR_VARS)
 include $(BUILD_EXECUTABLE)
 
 ## XXX how nasty are these hacks of making .c files be build targets?
+## XXX plugin changes don't properly take effect (have to manually delete the builtin.h file), but I guess that'll be rare...
 
 ## symlink .h files so the .c files can #include <ofono/X.h> . This is done in Makefile.am
 # make -f (printf 'printvars:\n\t @echo $(BUILT_SOURCES)' | psub) -f Makefile
