@@ -490,6 +490,7 @@ static void gobi_post_online(struct ofono_modem *modem)
 	struct gobi_data *data = ofono_modem_get_data(modem);
 	struct ofono_gprs *gprs;
 	struct ofono_gprs_context *gc;
+	struct ofono_message_waiting *mw;
 
 	DBG("%p", modem);
 
@@ -498,6 +499,12 @@ static void gobi_post_online(struct ofono_modem *modem)
 
 	if (data->features & GOBI_VOICE)
 		ofono_ussd_create(modem, 0, "qmimodem", data->device);
+
+	if (data->features & (GOBI_UIM | GOBI_DMS | GOBI_WMS)) {
+		mw = ofono_message_waiting_create(modem);
+		if (mw)
+			ofono_message_waiting_register(mw);
+	}
 
 	if (data->features & GOBI_WDS) {
 		gprs = ofono_gprs_create(modem, 0, "qmimodem", data->device);
