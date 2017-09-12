@@ -179,6 +179,7 @@ uint16_t qmi_service_register(struct qmi_service *service,
 bool qmi_service_unregister(struct qmi_service *service, uint16_t id);
 bool qmi_service_unregister_all(struct qmi_service *service);
 
+int qmi_error_to_ofono_cme(int qmi_error);
 
 /* FIXME: find a place for parse_error */
 enum parse_error {
