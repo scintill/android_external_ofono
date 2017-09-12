@@ -107,9 +107,10 @@ static bool extract_ss_info(struct qmi_result *result, int *status,
 	switch (ss->status) {
 	case NETWORK_REGISTRATION_STATUS_REGISTERED:
 	case NETWORK_REGISTRATION_STATUS_ROAMING:
-		if (ss->cs_state == 0 && ss->ps_state == 0)
+		if (ss->cs_state == 0 && ss->ps_state == 0) {
+			ofono_error("qmimodem BUG: reported registering state to early.");
 			*status = NETWORK_REGISTRATION_STATUS_SEARCHING;
-		else
+		} else
 			*status = ss->status;
 		break;
 	case NETWORK_REGISTRATION_STATUS_DENIED:
