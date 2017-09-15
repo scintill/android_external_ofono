@@ -28,6 +28,7 @@ enum sms_type {
 	SMS_TYPE_DELIVER_REPORT_ERROR,
 	SMS_TYPE_STATUS_REPORT,
 	SMS_TYPE_SUBMIT,
+	SMS_TYPE_SEND_RAW,
 	SMS_TYPE_SUBMIT_REPORT_ACK,
 	SMS_TYPE_SUBMIT_REPORT_ERROR,
 	SMS_TYPE_COMMAND
@@ -321,6 +322,11 @@ struct sms_submit {
 	guint8 ud[140];
 };
 
+struct sms_send_raw {
+	guint8 pdu_len;
+	guint8 pdu[152];
+};
+
 struct sms_submit_ack_report {
 	gboolean udhi;
 	guint8 pi;
@@ -350,6 +356,7 @@ struct sms {
 		struct sms_deliver_ack_report deliver_ack_report;
 		struct sms_deliver_err_report deliver_err_report;
 		struct sms_submit submit;
+		struct sms_send_raw send_raw;
 		struct sms_submit_ack_report submit_ack_report;
 		struct sms_submit_err_report submit_err_report;
 		struct sms_command command;
@@ -553,6 +560,9 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 				guint16 ref, gboolean use_16bit,
 				gboolean use_delivery_reports,
 				enum sms_alphabet alphabet);
+
+GSList *sms_pdu_prepare(const unsigned char *smsc_pdu, guint8 smsc_len,
+						const unsigned char *pdu, guint8 pdu_len);
 
 GSList *sms_datagram_prepare(const char *to,
 				const unsigned char *data, unsigned int len,

@@ -92,7 +92,23 @@ static bool extract_ss_info(struct qmi_result *result, int *status,
 	if (!ss)
 		return false;
 
-	*status = ss->status;
+	/* When connecting to a cell, the modem tells to early it's registered,
+	 * event it hasn't yet received a location update complete */
+	switch (ss->status) {
+	case NETWORK_REGISTRATION_STATUS_REGISTERED:
+	case NETWORK_REGISTRATION_STATUS_ROAMING:
+		if (ss->cs_state == 0 && ss->ps_state == 0)
+			*status = NETWORK_REGISTRATION_STATUS_SEARCHING;
+		else
+			*status = ss->status;
+		break;
+	case NETWORK_REGISTRATION_STATUS_DENIED:
+	case NETWORK_REGISTRATION_STATUS_NOT_REGISTERED:
+	case NETWORK_REGISTRATION_STATUS_SEARCHING:
+	case NETWORK_REGISTRATION_STATUS_UNKNOWN:
+		*status = ss->status;
+		break;
+	}
 
 	DBG("serving system status %d", ss->status);
 
@@ -332,6 +348,7 @@ static void register_net_cb(struct qmi_result *result, void *user_data)
 	struct cb_data *cbd = user_data;
 	ofono_netreg_register_cb_t cb = cbd->cb;
 	uint16_t error;
+	int cme_error;
 
 	DBG("");
 
@@ -341,7 +358,8 @@ static void register_net_cb(struct qmi_result *result, void *user_data)
 			goto done;
 		}
 
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
+		cme_error = qmi_error_to_ofono_cme(error);
+		CALLBACK_WITH_CME_ERROR(cb, cme_error, cbd->data);
 		return;
 	}
 

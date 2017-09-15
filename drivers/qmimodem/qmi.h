@@ -19,6 +19,9 @@
  *
  */
 
+#ifndef __OFONO_QMI_QMI_H
+#define __OFONO_QMI_QMI_H
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -76,7 +79,7 @@ typedef void (*qmi_destroy_func_t)(void *user_data);
 struct qmi_device;
 
 typedef void (*qmi_debug_func_t)(const char *str, void *user_data);
-
+typedef void (*qmi_sync_func_t)(void *user_data);
 typedef void (*qmi_shutdown_func_t)(void *user_data);
 typedef void (*qmi_discover_func_t)(uint8_t count,
 			const struct qmi_version *list, void *user_data);
@@ -95,6 +98,9 @@ bool qmi_device_discover(struct qmi_device *device, qmi_discover_func_t func,
 				void *user_data, qmi_destroy_func_t destroy);
 bool qmi_device_shutdown(struct qmi_device *device, qmi_shutdown_func_t func,
 				void *user_data, qmi_destroy_func_t destroy);
+
+bool qmi_device_sync(struct qmi_device *device,
+		     qmi_sync_func_t func, void *user_data);
 
 enum qmi_device_expected_data_format qmi_device_get_expected_data_format(
 						struct qmi_device *device);
@@ -172,3 +178,14 @@ uint16_t qmi_service_register(struct qmi_service *service,
 				void *user_data, qmi_destroy_func_t destroy);
 bool qmi_service_unregister(struct qmi_service *service, uint16_t id);
 bool qmi_service_unregister_all(struct qmi_service *service);
+
+int qmi_error_to_ofono_cme(int qmi_error);
+
+/* FIXME: find a place for parse_error */
+enum parse_error {
+	NONE = 0,
+	MISSING_MANDATORY = 1,
+	INVALID_LENGTH = 2,
+};
+
+#endif /* __OFONO_QMI_QMI_H */

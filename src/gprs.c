@@ -2601,6 +2601,9 @@ void ofono_gprs_status_notify(struct ofono_gprs *gprs, int status)
 
 	gprs->status = status;
 
+	if (status == 0)
+		ofono_gprs_detached_notify(gprs);
+
 	if (status != NETWORK_REGISTRATION_STATUS_REGISTERED &&
 			status != NETWORK_REGISTRATION_STATUS_ROAMING) {
 		gprs_attached_update(gprs);

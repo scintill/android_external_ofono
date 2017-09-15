@@ -36,10 +36,12 @@
 #include <unistd.h>
 
 #include <glib.h>
+#include <ofono/sms.h>
 
 #include "util.h"
 #include "storage.h"
 #include "smsutil.h"
+#include "log.h"
 
 #define uninitialized_var(x) x = x
 
@@ -1477,6 +1479,7 @@ gboolean sms_encode(const struct sms *in, int *len, int *tpdu_len,
 	int tpdu_start;
 
 	if (in->type == SMS_TYPE_DELIVER || in->type == SMS_TYPE_SUBMIT ||
+			in->type == SMS_TYPE_SEND_RAW ||
 			in->type == SMS_TYPE_COMMAND ||
 			in->type == SMS_TYPE_STATUS_REPORT)
 		if (!sms_encode_address_field(&in->sc_addr, TRUE, pdu, &offset))
@@ -1506,6 +1509,10 @@ gboolean sms_encode(const struct sms *in, int *len, int *tpdu_len,
 	case SMS_TYPE_SUBMIT:
 		if (!encode_submit(&in->submit, pdu, &offset))
 			return FALSE;
+		break;
+	case SMS_TYPE_SEND_RAW:
+		memcpy(&pdu[offset], in->send_raw.pdu, in->send_raw.pdu_len);
+		offset += in->send_raw.pdu_len;
 		break;
 	case SMS_TYPE_SUBMIT_REPORT_ACK:
 		if (!encode_submit_ack_report(&in->submit_ack_report, pdu,
@@ -1548,7 +1555,12 @@ gboolean sms_decode(const unsigned char *pdu, int len, gboolean outgoing,
 
 	memset(out, 0, sizeof(*out));
 
-	if (tpdu_len < len) {
+	if (tpdu_len == TPDU_UNKNOWN_WITH_SC) {
+		/* unknown TPDU length but prefixed with SC */
+		sms_decode_address_field(pdu, len, &offset, TRUE,
+				&out->sc_addr);
+		tpdu_len = len - offset;
+	} else if (tpdu_len < len) {
 		if (!sms_decode_address_field(pdu, len, &offset,
 						TRUE, &out->sc_addr))
 			return FALSE;
@@ -3746,6 +3758,34 @@ GSList *sms_text_prepare(const char *to, const char *utf8, guint16 ref,
 	return sms_text_prepare_with_alphabet(to, utf8, ref, use_16bit,
 						use_delivery_reports,
 						SMS_ALPHABET_DEFAULT);
+}
+
+GSList *sms_pdu_prepare(const unsigned char *smsc_pdu, guint8 smsc_len,
+						const unsigned char *pdu, guint8 pdu_len)
+{
+	struct sms sms_msg;
+	int offset = 0;
+
+	if (sms_decode_address_field(smsc_pdu, smsc_len, &offset, TRUE, &sms_msg.sc_addr) == FALSE) {
+		DBG("error decoding smsc pdu");
+		return NULL;
+	}
+	if (offset != smsc_len) {
+		DBG("error decoding smsc pdu: decoded %d bytes, but got %d", offset, smsc_len);
+		return NULL;
+	}
+
+	if (pdu_len > sizeof(sms_msg.send_raw.pdu)) {
+		DBG("pdu is too long. pdu_len=%d, max size=%d", pdu_len, sizeof(sms_msg.send_raw.pdu));
+		return NULL;
+	}
+
+	memset(&sms_msg, 0, sizeof(struct sms));
+	sms_msg.type = SMS_TYPE_SEND_RAW;
+	sms_msg.send_raw.pdu_len = pdu_len;
+	memcpy(sms_msg.send_raw.pdu, pdu, pdu_len);
+
+	return sms_list_append(NULL, &sms_msg);
 }
 
 gboolean cbs_dcs_decode(guint8 dcs, gboolean *udhi, enum sms_class *cls,

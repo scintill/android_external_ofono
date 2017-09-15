@@ -76,7 +76,7 @@ static struct ofono_call *create_call(struct ofono_voicecall *vc, int type,
 
 	call->clip_validity = clip;
 
-	d->calls = g_slist_insert_sorted(d->calls, call, at_util_call_compare);
+	d->calls = g_slist_insert_sorted(d->calls, call, ofono_call_compare);
 
 	return call;
 }
@@ -179,7 +179,7 @@ static void cring_notify(GAtResult *result, gpointer user_data)
 	/* CRING can repeat, ignore if we already have an incoming call */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	g_at_result_iter_init(&iter, result);
@@ -218,7 +218,7 @@ static void clip_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CLIP for unknown call");
 		return;
@@ -347,7 +347,7 @@ static void conf_notify(GAtResult *result, gpointer user_data)
 	ofono_info("Call setup: id %d", call_id);
 
 	l = g_slist_find_custom(vd->calls, GINT_TO_POINTER(call_id),
-				at_util_call_compare_by_id);
+				ofono_call_compare_by_id);
 	if (l == NULL) {
 		ofono_error("Received CONF for untracked call");
 		return;
@@ -384,7 +384,7 @@ static void conn_notify(GAtResult *result, gpointer user_data)
 	ofono_info("Call connect: id %d type %d", call_id, call_type);
 
 	l = g_slist_find_custom(vd->calls, GINT_TO_POINTER(call_id),
-				at_util_call_compare_by_id);
+				ofono_call_compare_by_id);
 	if (l == NULL) {
 		ofono_error("Received CONN for untracked call");
 		return;
@@ -428,7 +428,7 @@ static void cend_notify(GAtResult *result, gpointer user_data)
 				call_id, duration, end_status);
 
 	l = g_slist_find_custom(vd->calls, GINT_TO_POINTER(call_id),
-				at_util_call_compare_by_id);
+				ofono_call_compare_by_id);
 	if (l == NULL) {
 		ofono_error("Received CEND for untracked call");
 		return;

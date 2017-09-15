@@ -128,7 +128,7 @@ static struct ofono_call *create_call(struct ofono_voicecall *vc, int type,
 
 	call->clip_validity = clip;
 
-	d->calls = g_slist_insert_sorted(d->calls, call, at_util_call_compare);
+	d->calls = g_slist_insert_sorted(d->calls, call, ofono_call_compare);
 
 	return call;
 }
@@ -462,7 +462,7 @@ static void ecav_notify(GAtResult *result, gpointer user_data)
 	 * If it doesn't exists we make a new one
 	 */
 	l = g_slist_find_custom(vd->calls, GUINT_TO_POINTER(id),
-				at_util_call_compare_by_id);
+				ofono_call_compare_by_id);
 
 	if (l)
 		existing_call = l->data;

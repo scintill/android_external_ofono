@@ -765,3 +765,63 @@ const char *call_status_to_string(enum call_status status)
 
 	return "unknown";
 }
+
+gint ofono_call_compare(gconstpointer a, gconstpointer b)
+{
+	const struct ofono_call *ca = a;
+	const struct ofono_call *cb = b;
+
+	if (ca->id < cb->id)
+		return -1;
+
+	if (ca->id > cb->id)
+		return 1;
+
+	return 0;
+}
+
+gint ofono_call_compare_by_status(gconstpointer a, gconstpointer b)
+{
+	const struct ofono_call *call = a;
+	int status = GPOINTER_TO_INT(b);
+
+	if (status != call->status)
+		return 1;
+
+	return 0;
+}
+
+gint ofono_call_compare_by_id(gconstpointer a, gconstpointer b)
+{
+	const struct ofono_call *call = a;
+	unsigned int id = GPOINTER_TO_UINT(b);
+
+	if (id < call->id)
+		return -1;
+
+	if (id > call->id)
+		return 1;
+
+	return 0;
+}
+
+const char *ofono_call_status_to_string(enum call_status status)
+{
+	switch (status) {
+	case CALL_STATUS_ACTIVE:
+		return "active";
+	case CALL_STATUS_HELD:
+		return "held";
+	case CALL_STATUS_DIALING:
+		return "dialing";
+	case CALL_STATUS_ALERTING:
+		return "alerting";
+	case CALL_STATUS_INCOMING:
+		return "incoming";
+	case CALL_STATUS_WAITING:
+		return "waiting";
+	case CALL_STATUS_DISCONNECTED:
+		return "disconnected";
+	}
+	return "unknown";
+}

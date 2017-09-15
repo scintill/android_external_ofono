@@ -32,6 +32,7 @@
 #define OFONO_API_SUBJECT_TO_CHANGE
 #include <ofono/log.h>
 #include <ofono/types.h>
+#include "../src/common.h"
 
 #include "atutil.h"
 #include "vendor.h"
@@ -68,17 +69,6 @@ void decode_at_error(struct ofono_error *error, const char *final)
 	}
 }
 
-gint at_util_call_compare_by_status(gconstpointer a, gconstpointer b)
-{
-	const struct ofono_call *call = a;
-	int status = GPOINTER_TO_INT(b);
-
-	if (status != call->status)
-		return 1;
-
-	return 0;
-}
-
 gint at_util_call_compare_by_phone_number(gconstpointer a, gconstpointer b)
 {
 	const struct ofono_call *call = a;
@@ -86,34 +76,6 @@ gint at_util_call_compare_by_phone_number(gconstpointer a, gconstpointer b)
 
 	return memcmp(&call->phone_number, pb,
 				sizeof(struct ofono_phone_number));
-}
-
-gint at_util_call_compare_by_id(gconstpointer a, gconstpointer b)
-{
-	const struct ofono_call *call = a;
-	unsigned int id = GPOINTER_TO_UINT(b);
-
-	if (id < call->id)
-		return -1;
-
-	if (id > call->id)
-		return 1;
-
-	return 0;
-}
-
-gint at_util_call_compare(gconstpointer a, gconstpointer b)
-{
-	const struct ofono_call *ca = a;
-	const struct ofono_call *cb = b;
-
-	if (ca->id < cb->id)
-		return -1;
-
-	if (ca->id > cb->id)
-		return 1;
-
-	return 0;
 }
 
 GSList *at_util_parse_clcc(GAtResult *result, unsigned int *ret_mpty_ids)
@@ -174,7 +136,7 @@ GSList *at_util_parse_clcc(GAtResult *result, unsigned int *ret_mpty_ids)
 		else
 			call->clip_validity = 2;
 
-		l = g_slist_insert_sorted(l, call, at_util_call_compare);
+		l = g_slist_insert_sorted(l, call, ofono_call_compare);
 
 		if (mpty)
 			mpty_ids |= 1 << id;
