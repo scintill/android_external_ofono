@@ -50,7 +50,7 @@ include $(CLEAR_VARS)
 		src/radio-settings.c src/sim-auth.c src/sim.c src/simfs.c src/simutil.c \
 		src/siri.c src/smsagent.c src/sms.c src/smsutil.c src/stkagent.c src/stk.c \
 		src/stkutil.c src/storage.c src/ussd.c src/util.c src/voicecall.c \
-		src/watch.c \
+		src/watch.c src/call-list.c src/netmonagent.c \
 		\
 		android/glibc.c android/log.c
 
@@ -79,6 +79,8 @@ include $(CLEAR_VARS)
 			drivers/qmimodem/radio-settings.c drivers/qmimodem/sim.c \
 			drivers/qmimodem/sim-legacy.c drivers/qmimodem/sms.c \
 			drivers/qmimodem/ussd.c drivers/qmimodem/voicecall.c plugins/gobi.c \
+			drivers/qmimodem/voice_generated.c drivers/qmimodem/voice.c \
+			drivers/qmimodem/netmon.c \
 			plugins/gobidev.c
 		OFONO_PLUGINS += gobidev gobi qmimodem
 	endif
@@ -117,10 +119,16 @@ $(addprefix $(LOCAL_PATH)/, $(LOCAL_SRC_FILES)): $(addprefix $(LOCAL_PATH)/, \
 		include/ofono/cdma-netreg.h include/ofono/cdma-provision.h \
 		include/ofono/handsfree.h include/ofono/handsfree-audio.h \
 		include/ofono/siri.h include/ofono/netmon.h include/ofono/lte.h \
+		include/ofono/call-list.h include/ofono/netmonagent.h \
 		include/ofono/version.h \
 		)
 
 $(LOCAL_PATH)/include/ofono/%.h: $(LOCAL_PATH)/include/%.h
+	$(hide) mkdir -p $(shell dirname $@)
+	$(hide) ln -s $(realpath $<) $@
+
+# XXX recipe dup
+$(LOCAL_PATH)/include/ofono/netmonagent.h: $(LOCAL_PATH)/src/netmonagent.h
 	$(hide) mkdir -p $(shell dirname $@)
 	$(hide) ln -s $(realpath $<) $@
 
