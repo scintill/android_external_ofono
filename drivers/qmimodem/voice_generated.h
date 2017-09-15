@@ -41,26 +41,27 @@ enum parse_error qmi_voice_dial_call_parse(
 		struct qmi_result *qmi_result,
 		struct qmi_voice_dial_call_result *result);
 
-struct qmi_voice_end_call_arg {
+struct qmi_voice_manage_call_arg {
+	uint8_t ss_call_type;
 	bool call_id_set;
 	uint8_t call_id;
 };
 
-int qmi_voice_end_call(
-		struct qmi_voice_end_call_arg *arg,
+int qmi_voice_manage_call(
+		struct qmi_voice_manage_call_arg *arg,
 		struct qmi_service *service,
 		qmi_result_func_t func,
 		void *user_data,
 		qmi_destroy_func_t destroy);
 
-struct qmi_voice_end_call_result {
-	bool call_id_set;
-	uint8_t call_id;
+struct qmi_voice_manage_call_result {
+	bool failcause_set;
+	uint16_t failcause;
 };
 
-enum parse_error qmi_voice_end_call_parse(
+enum parse_error qmi_voice_manage_call_parse(
 		struct qmi_result *qmi_result,
-		struct qmi_voice_end_call_result *result);
+		struct qmi_voice_manage_call_result *result);
 
 struct qmi_voice_answer_call_arg {
 	bool call_id_set;

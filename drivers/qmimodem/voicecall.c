@@ -336,13 +336,13 @@ err:
 	g_free(cbd);
 }
 
-static void end_cb(struct qmi_result *result, void *user_data)
+static void manage_cb(struct qmi_result *result, void *user_data)
 {
 	struct cb_data *cbd = user_data;
 	struct ofono_voicecall *vc = cbd->user;
 	ofono_voicecall_cb_t cb = cbd->cb;
 	uint16_t error;
-	struct qmi_voice_end_call_result end_result;
+	struct qmi_voice_manage_call_result end_result;
 	struct ofono_call *call;
 
 	if (qmi_result_set_error(result, &error)) {
@@ -351,7 +351,7 @@ static void end_cb(struct qmi_result *result, void *user_data)
 		return;
 	}
 
-	if (NONE != qmi_voice_end_call_parse(result, &end_result)) {
+	if (NONE != qmi_voice_manage_call_parse(result, &end_result)) {
 		DBG("Received invalid Result");
 		CALLBACK_WITH_FAILURE(cb, cbd->data);
 		return;
@@ -365,31 +365,63 @@ static void release_specific(struct ofono_voicecall *vc, int id,
 {
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 	struct cb_data *cbd = cb_data_new(cb, data);
-	struct qmi_voice_end_call_arg arg;
+	struct qmi_voice_manage_call_arg arg;
 	int i;
+	GSList *l;
+	struct ofono_call *call;
 
 	DBG("");
 	cbd->user = vc;
 
+	l = g_slist_find_custom(vd->call_list, GINT_TO_POINTER(id),
+							ofono_call_compare_by_id);
+	if (l == NULL) {
+		ofono_error("invalid call id %d", id);
+		goto error;
+	}
+
+	call = l->data;
+
 	arg.call_id_set = true;
 	arg.call_id = id;
+	switch (call->status) {
+		case CALL_STATUS_ACTIVE:
+		case CALL_STATUS_DIALING:
+		case CALL_STATUS_ALERTING:
+			arg.ss_call_type = 9; // release specified call
+			break;
+		case CALL_STATUS_HELD:
+		case CALL_STATUS_INCOMING:
+		case CALL_STATUS_WAITING:
+			arg.ss_call_type = 1; // release held or waiting
+			break;
+		case CALL_STATUS_DISCONNECTED:
+			goto success;
+	}
 
-	if (!qmi_voice_end_call(&arg,
+	if (!qmi_voice_manage_call(&arg,
 				vd->voice,
-				end_cb,
+				manage_cb,
 				cbd,
 				g_free))
 		return;
 
+error:
 	CALLBACK_WITH_FAILURE(cb, data);
 	g_free(cbd);
+	return;
+
+success:
+	CALLBACK_WITH_SUCCESS(cb, data);
+	g_free(cbd);
+	return;
 }
 
 static void hangup_active(struct ofono_voicecall *vc,
 		ofono_voicecall_cb_t cb, void *data)
 {
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
-	struct qmi_voice_end_call_arg arg;
+	struct qmi_voice_manage_call_arg arg;
 	struct ofono_call *call;
 	GSList *list = NULL;
 	enum call_status active[] = {

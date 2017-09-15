@@ -56,8 +56,8 @@ enum parse_error qmi_voice_dial_call_parse(
 	return err;
 }
 
-int qmi_voice_end_call(
-		struct qmi_voice_end_call_arg *arg,
+int qmi_voice_manage_call(
+		struct qmi_voice_manage_call_arg *arg,
 		struct qmi_service *service,
 		qmi_result_func_t func,
 		void *user_data,
@@ -69,16 +69,22 @@ int qmi_voice_end_call(
 	if (!param)
 		goto error;
 
+	if (!qmi_param_append_uint8(
+			param,
+			0x1,
+			arg->ss_call_type))
+		goto error;
+
 	if (arg->call_id_set) {
 		if (!qmi_param_append_uint8(
 					param,
-					0x1,
+					0x10,
 					arg->call_id))
 			goto error;
 	}
 
 	if (qmi_service_send(service,
-			     0x21,
+			     0x31,
 			     param,
 			     func,
 			     user_data,
@@ -89,17 +95,15 @@ error:
 	return 1;
 }
 
-enum parse_error qmi_voice_end_call_parse(
+enum parse_error qmi_voice_manage_call_parse(
 		struct qmi_result *qmi_result,
-		struct qmi_voice_end_call_result *result)
+		struct qmi_voice_manage_call_result *result)
 {
-	int err = NONE;
-
 	/* optional */
-	if (qmi_result_get_uint8(qmi_result, 0x10, &result->call_id))
-		result->call_id_set = 1;
+	if (qmi_result_get_uint16(qmi_result, 0x10, &result->failcause))
+		result->failcause_set = 1;
 
-	return err;
+	return NONE;
 }
 
 
