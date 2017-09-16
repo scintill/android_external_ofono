@@ -40,7 +40,7 @@
 
 static GSList *modem_list;
 
-static int create_gobimodem(const char *devpath)
+static int create_gobimodem(const char *devpath, const char *iface_name)
 {
 	struct ofono_modem *modem;
 	int retval;
@@ -54,6 +54,7 @@ static int create_gobimodem(const char *devpath)
 	modem_list = g_slist_prepend(modem_list, modem);
 
 	ofono_modem_set_string(modem, "Device", devpath);
+	ofono_modem_set_string(modem, "NetworkInterface", iface_name);
 
 	/* This causes driver->probe() to be called... */
 	retval = ofono_modem_register(modem);
@@ -86,15 +87,20 @@ static int create_gobimodem(const char *devpath)
 static int detect_init(void)
 {
 	const char *gobi_path;
+	const char *iface_name;
 
 	gobi_path = getenv("OFONO_GOBI_DEVICE");
 	if (gobi_path == NULL)
 		return 0;
 
+	iface_name = getenv("OFONO_GOBI_IFACE");
+	if (iface_name == NULL)
+		return 0;
+
 	ofono_info("GobiDev initializing modem path %s",
 			gobi_path);
 
-	create_gobimodem(gobi_path);
+	create_gobimodem(gobi_path, iface_name);
 
 	return 0;
 }
