@@ -430,6 +430,20 @@ done:
 									NULL);
 }
 
+static void set_data_format_cb(struct qmi_result *result, void *user_data) {
+	struct ofono_gprs_context *gc = user_data;
+	struct gprs_context_data *data = ofono_gprs_context_get_data(gc);
+
+	if (qmi_result_set_error(result, NULL)) {
+		ofono_error("failed to set QMI WDA data format to raw IP");
+	} else {
+		DBG("successfully set QMI WDA data format to raw IP");
+	}
+
+	qmi_service_create_shared(data->dev, QMI_SERVICE_WDS, create_wds_cb, gc,
+							  NULL);
+}
+
 static void create_wda_cb(struct qmi_service *service, void *user_data)
 {
 	struct ofono_gprs_context *gc = user_data;
@@ -444,9 +458,20 @@ static void create_wda_cb(struct qmi_service *service, void *user_data)
 
 	data->wda = qmi_service_ref(service);
 
-	if (qmi_service_send(data->wda, QMI_WDA_GET_DATA_FORMAT, NULL,
-					get_data_format_cb, gc, NULL) > 0)
-		return;
+	if (!ofono_modem_get_boolean(ofono_gprs_context_get_modem(gc), MODEM_PROP_SET_RAWIP)) {
+		if (qmi_service_send(data->wda, QMI_WDA_GET_DATA_FORMAT, NULL,
+						get_data_format_cb, gc, NULL) > 0)
+			return;
+	} else {
+		struct qmi_param *param;
+		param = qmi_param_new_uint32(QMI_WDA_LL_PROTOCOL, QMI_WDA_DATA_LINK_PROTOCOL_RAW_IP);
+		if (!param) {
+			goto error; // TODO ?
+		}
+		if (qmi_service_send(data->wda, QMI_WDA_SET_DATA_FORMAT, param, set_data_format_cb, gc, NULL) > 0) {
+			return;
+		}
+	}
 
 error:
 	qmi_service_create_shared(data->dev, QMI_SERVICE_WDS, create_wds_cb, gc,

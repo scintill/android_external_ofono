@@ -21,6 +21,8 @@
 
 #include "util.h"
 
+#define MODEM_PROP_SET_RAWIP "set-rawip"
+
 extern void qmi_devinfo_init(void);
 extern void qmi_devinfo_exit(void);
 
