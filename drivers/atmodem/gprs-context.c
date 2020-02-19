@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -158,7 +157,10 @@ static gboolean setup_ppp(struct ofono_gprs_context *gc)
 		g_at_ppp_set_debug(gcd->ppp, ppp_debug, "PPP");
 
 	g_at_ppp_set_auth_method(gcd->ppp, gcd->auth_method);
-	g_at_ppp_set_credentials(gcd->ppp, gcd->username, gcd->password);
+
+	if (gcd->auth_method != G_AT_PPP_AUTH_METHOD_NONE)
+		g_at_ppp_set_credentials(gcd->ppp, gcd->username,
+								gcd->password);
 
 	/* set connect and disconnect callbacks */
 	g_at_ppp_set_connect_function(gcd->ppp, ppp_connect, gc);
@@ -247,7 +249,7 @@ static void at_gprs_activate_primary(struct ofono_gprs_context *gc,
 	memcpy(gcd->username, ctx->username, sizeof(ctx->username));
 	memcpy(gcd->password, ctx->password, sizeof(ctx->password));
 
-	/* We only support CHAP and PAP */
+	/* We support CHAP, PAP and NONE */
 	switch (ctx->auth_method) {
 	case OFONO_GPRS_AUTH_METHOD_CHAP:
 		gcd->auth_method = G_AT_PPP_AUTH_METHOD_CHAP;
@@ -255,8 +257,11 @@ static void at_gprs_activate_primary(struct ofono_gprs_context *gc,
 	case OFONO_GPRS_AUTH_METHOD_PAP:
 		gcd->auth_method = G_AT_PPP_AUTH_METHOD_PAP;
 		break;
-	default:
-		goto error;
+	case OFONO_GPRS_AUTH_METHOD_NONE:
+		gcd->auth_method = G_AT_PPP_AUTH_METHOD_NONE;
+		memset(gcd->username, 0, sizeof(gcd->username));
+		memset(gcd->password, 0, sizeof(gcd->password));
+		break;
 	}
 
 	gcd->state = STATE_ENABLING;
@@ -284,33 +289,35 @@ static void at_gprs_activate_primary(struct ofono_gprs_context *gc,
 
 	len = snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\"", ctx->cid);
 
-	if (ctx->apn) {
-		switch (gcd->vendor) {
-		case OFONO_VENDOR_UBLOX:
-			/*
-			 * U-blox modems require a magic prefix to the APN to
-			 * specify the authentication method to use in the
-			 * network.  See UBX-13002752 - R21.
-			 *
-			 * As the response of the read command omits this magic
-			 * prefix, this is the least invasive place to set it.
-			 */
-			switch (ctx->auth_method) {
-			case OFONO_GPRS_AUTH_METHOD_CHAP:
-				snprintf(buf + len, sizeof(buf) - len - 3,
-						",\"CHAP:%s\"", ctx->apn);
-				break;
-			case OFONO_GPRS_AUTH_METHOD_PAP:
-				snprintf(buf + len, sizeof(buf) - len - 3,
-						",\"PAP:%s\"", ctx->apn);
-				break;
-			}
+	switch (gcd->vendor) {
+	case OFONO_VENDOR_UBLOX:
+		/*
+		 * U-blox modems require a magic prefix to the APN to
+		 * specify the authentication method to use in the
+		 * network.  See UBX-13002752 - R21.
+		 *
+		 * As the response of the read command omits this magic
+		 * prefix, this is the least invasive place to set it.
+		 */
+		switch (ctx->auth_method) {
+		case OFONO_GPRS_AUTH_METHOD_CHAP:
+			snprintf(buf + len, sizeof(buf) - len - 3,
+					",\"CHAP:%s\"", ctx->apn);
 			break;
-		default:
-			snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"",
-					ctx->apn);
+		case OFONO_GPRS_AUTH_METHOD_PAP:
+			snprintf(buf + len, sizeof(buf) - len - 3,
+					",\"PAP:%s\"", ctx->apn);
+			break;
+		case OFONO_GPRS_AUTH_METHOD_NONE:
+			snprintf(buf + len, sizeof(buf) - len - 3,
+					",\"%s\"", ctx->apn);
 			break;
 		}
+		break;
+	default:
+		snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"",
+				ctx->apn);
+		break;
 	}
 
 	if (g_at_chat_send(gcd->chat, buf, none_prefix,
@@ -402,9 +409,11 @@ static void at_cgdata_test_cb(gboolean ok, GAtResult *result,
 		goto error;
 	}
 
-	if (!g_at_result_iter_open_list(&iter)) {
-		DBG("no list found");
-		goto error;
+	if (gcd->vendor != OFONO_VENDOR_QUECTEL_SERIAL) {
+		if (!g_at_result_iter_open_list(&iter)) {
+			DBG("no list found");
+			goto error;
+		}
 	}
 
 	while (!found && g_at_result_iter_next_string(&iter, &data_type)) {
@@ -461,10 +470,19 @@ static int at_gprs_context_probe(struct ofono_gprs_context *gc,
 static void at_gprs_context_remove(struct ofono_gprs_context *gc)
 {
 	struct gprs_context_data *gcd = ofono_gprs_context_get_data(gc);
+	GAtIO *io;
 
 	DBG("");
 
 	if (gcd->state != STATE_IDLE && gcd->ppp) {
+		if ((gcd->vendor == OFONO_VENDOR_HUAWEI) && gcd->chat) {
+			/* immediately send escape sequence */
+			io = g_at_chat_get_io(gcd->chat);
+
+			if (io)
+				g_at_io_write(io, "+++", 3);
+		}
+
 		g_at_ppp_unref(gcd->ppp);
 		g_at_chat_resume(gcd->chat);
 	}
@@ -475,7 +493,7 @@ static void at_gprs_context_remove(struct ofono_gprs_context *gc)
 	g_free(gcd);
 }
 
-static struct ofono_gprs_context_driver driver = {
+static const struct ofono_gprs_context_driver driver = {
 	.name			= "atmodem",
 	.probe			= at_gprs_context_probe,
 	.remove			= at_gprs_context_remove,

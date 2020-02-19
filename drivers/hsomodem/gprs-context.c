@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -151,7 +150,6 @@ static void hso_gprs_activate_primary(struct ofono_gprs_context *gc,
 	struct gprs_context_data *gcd = ofono_gprs_context_get_data(gc);
 	struct cb_data *cbd = cb_data_new(cb, data);
 	char buf[AUTH_BUF_LENGTH];
-	int len;
 
 	/* IPv6 support not implemented */
 	if (ctx->proto != OFONO_GPRS_PROTO_IP)
@@ -174,11 +172,8 @@ static void hso_gprs_activate_primary(struct ofono_gprs_context *gc,
 				NULL, NULL, NULL) == 0)
 		goto error;
 
-	len = snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\"", ctx->cid);
-
-	if (ctx->apn)
-		snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"",
-				ctx->apn);
+	snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\",\"%s\"",
+			ctx->cid, ctx->apn);
 
 	if (g_at_chat_send(gcd->chat, buf, none_prefix,
 				hso_cgdcont_cb, cbd, g_free) > 0)
@@ -379,7 +374,7 @@ static void hso_gprs_context_remove(struct ofono_gprs_context *gc)
 	g_free(gcd);
 }
 
-static struct ofono_gprs_context_driver driver = {
+static const struct ofono_gprs_context_driver driver = {
 	.name			= "hsomodem",
 	.probe			= hso_gprs_context_probe,
 	.remove			= hso_gprs_context_remove,

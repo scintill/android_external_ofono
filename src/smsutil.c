@@ -36,10 +36,12 @@
 #include <unistd.h>
 
 #include <glib.h>
+#include <ell/ell.h>
 
 #include "util.h"
 #include "storage.h"
 #include "smsutil.h"
+#include "log.h"
 
 #define uninitialized_var(x) x = x
 
@@ -559,13 +561,13 @@ gboolean sms_encode_address_field(const struct sms_address *in, gboolean sc,
 			return FALSE;
 
 		if (written > 11) {
-			g_free(gsm);
+			l_free(gsm);
 			return FALSE;
 		}
 
-		r = pack_7bit_own_buf(gsm, written, 0, FALSE, &packed, 0, p);
+		r = pack_7bit_own_buf(gsm, written, 0, false, &packed, 0, p);
 
-		g_free(gsm);
+		l_free(gsm);
 
 		if (r == NULL)
 			return FALSE;
@@ -670,7 +672,7 @@ gboolean sms_decode_address_field(const unsigned char *pdu, int len,
 			return TRUE;
 		}
 
-		res = unpack_7bit(pdu + *offset, byte_len, 0, FALSE, chars,
+		res = unpack_7bit(pdu + *offset, byte_len, 0, false, chars,
 					&written, 0);
 
 		*offset = *offset + (addr_len + 1) / 2;
@@ -679,10 +681,9 @@ gboolean sms_decode_address_field(const unsigned char *pdu, int len,
 			return FALSE;
 
 		utf8 = convert_gsm_to_utf8(res, written, NULL, NULL, 0);
+		l_free(res);
 
-		g_free(res);
-
-		if (utf8 == NULL)
+		if (!utf8)
 			return FALSE;
 
 		/*
@@ -690,13 +691,12 @@ gboolean sms_decode_address_field(const unsigned char *pdu, int len,
 		 * 22 bytes+terminator in UTF-8.
 		 */
 		if (strlen(utf8) > 22) {
-			g_free(utf8);
+			l_free(utf8);
 			return FALSE;
 		}
 
 		strcpy(out->address, utf8);
-
-		g_free(utf8);
+		l_free(utf8);
 	}
 
 	return TRUE;
@@ -1333,7 +1333,7 @@ gboolean sms_decode_unpacked_stk_pdu(const unsigned char *pdu, int len,
 	if ((len - offset) < out->submit.udl)
 		return FALSE;
 
-	pack_7bit_own_buf(pdu + offset, out->submit.udl, 0, FALSE,
+	pack_7bit_own_buf(pdu + offset, out->submit.udl, 0, false,
 				NULL, 0, out->submit.ud);
 
 	return TRUE;
@@ -1477,6 +1477,7 @@ gboolean sms_encode(const struct sms *in, int *len, int *tpdu_len,
 	int tpdu_start;
 
 	if (in->type == SMS_TYPE_DELIVER || in->type == SMS_TYPE_SUBMIT ||
+			in->type == SMS_TYPE_SEND_RAW ||
 			in->type == SMS_TYPE_COMMAND ||
 			in->type == SMS_TYPE_STATUS_REPORT)
 		if (!sms_encode_address_field(&in->sc_addr, TRUE, pdu, &offset))
@@ -1506,6 +1507,10 @@ gboolean sms_encode(const struct sms *in, int *len, int *tpdu_len,
 	case SMS_TYPE_SUBMIT:
 		if (!encode_submit(&in->submit, pdu, &offset))
 			return FALSE;
+		break;
+	case SMS_TYPE_SEND_RAW:
+		memcpy(&pdu[offset], in->send_raw.pdu, in->send_raw.pdu_len);
+		offset += in->send_raw.pdu_len;
 		break;
 	case SMS_TYPE_SUBMIT_REPORT_ACK:
 		if (!encode_submit_ack_report(&in->submit_ack_report, pdu,
@@ -2221,7 +2226,8 @@ char *sms_decode_text(GSList *sms_list)
 	const struct sms *sms;
 	int guess_size = g_slist_length(sms_list);
 	char *utf8;
-	GByteArray *utf16 = 0;
+	void *utf16 = NULL;
+	size_t utf16_size = 0;
 
 	if (guess_size == 1)
 		guess_size = 160;
@@ -2268,7 +2274,7 @@ char *sms_decode_text(GSList *sms_list)
 
 			if (unpack_7bit_own_buf(ud + taken,
 						udl_in_bytes - taken,
-						taken, FALSE, max_chars,
+						taken, false, max_chars,
 						&written, 0, buf) == NULL)
 				continue;
 
@@ -2283,10 +2289,10 @@ char *sms_decode_text(GSList *sms_list)
 			 * If language is not defined in 3GPP TS 23.038,
 			 * implementations are instructed to ignore it
 			 */
-			if (locking_shift > SMS_ALPHABET_PORTUGUESE)
+			if (locking_shift > SMS_ALPHABET_URDU)
 				locking_shift = GSM_DIALECT_DEFAULT;
 
-			if (single_shift > SMS_ALPHABET_PORTUGUESE)
+			if (single_shift > SMS_ALPHABET_URDU)
 				single_shift = GSM_DIALECT_DEFAULT;
 
 			converted = convert_gsm_to_utf8_with_lang(buf, written,
@@ -2295,7 +2301,7 @@ char *sms_decode_text(GSList *sms_list)
 								single_shift);
 			if (converted) {
 				g_string_append(str, converted);
-				g_free(converted);
+				l_free(converted);
 			}
 		} else {
 			const guint8 *from = ud + taken;
@@ -2305,7 +2311,7 @@ char *sms_decode_text(GSList *sms_list)
 			 * Header is odd, the maximum length of the whole TP-UD
 			 * field is 139 octets
 			 */
-			gssize num_ucs2_chars = (udl_in_bytes - taken) >> 1;
+			size_t num_ucs2_chars = (udl_in_bytes - taken) >> 1;
 			num_ucs2_chars = num_ucs2_chars << 1;
 
 			/*
@@ -2316,25 +2322,32 @@ char *sms_decode_text(GSList *sms_list)
 			 * character in the middle. So accumulate the
 			 * entire message before converting to UTF-8.
 			 */
-			if (!utf16)
-				utf16 = g_byte_array_new();
-
-			g_byte_array_append(utf16, from, num_ucs2_chars);
+			utf16 = l_realloc(utf16, utf16_size + num_ucs2_chars);
+			memcpy(utf16 + utf16_size, from, num_ucs2_chars);
+			utf16_size += num_ucs2_chars;
 		}
 
 	}
 
 	if (utf16) {
-		char *converted = g_convert_with_fallback((const gchar *)
-						utf16->data, utf16->len,
-						"UTF-8//TRANSLIT", "UTF-16BE",
-						NULL, NULL, NULL, NULL);
-		if (converted) {
-			g_string_append(str, converted);
-			g_free(converted);
+		char *converted;
+
+		/* Strings are in UTF16-BE, so convert if needed */
+		if (L_CPU_TO_BE16(0x8000) != 0x8000) {
+			size_t i;
+			uint16_t *p = utf16;
+
+			for (i = 0; i < utf16_size / 2; i++)
+				p[i] = __builtin_bswap16(p[i]);
 		}
 
-		g_byte_array_free(utf16, TRUE);
+		converted = l_utf8_from_utf16(utf16, utf16_size);
+		if (converted) {
+			g_string_append(str, converted);
+			l_free(converted);
+		}
+
+		l_free(utf16);
 	}
 
 	utf8 = g_string_free(str, FALSE);
@@ -3564,7 +3577,7 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 	struct sms template;
 	int offset = 0;
 	unsigned char *gsm_encoded = NULL;
-	char *ucs2_encoded = NULL;
+	void *ucs2_encoded = NULL;
 	long written;
 	long left;
 	guint8 seq;
@@ -3589,16 +3602,15 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 	gsm_encoded = convert_utf8_to_gsm_best_lang(utf8, -1, NULL, &written, 0,
 							alphabet, &used_locking,
 							&used_single);
-	if (gsm_encoded == NULL) {
-		gsize converted;
+	if (!gsm_encoded) {
+		size_t converted;
 
-		ucs2_encoded = g_convert(utf8, -1, "UCS-2BE//TRANSLIT", "UTF-8",
-						NULL, &converted, NULL);
-		written = converted;
+		ucs2_encoded = l_utf8_to_ucs2be(utf8, &converted);
+		if (!ucs2_encoded)
+			return NULL;
+
+		written = converted - 2;
 	}
-
-	if (gsm_encoded == NULL && ucs2_encoded == NULL)
-		return NULL;
 
 	if (gsm_encoded != NULL)
 		template.submit.dcs = 0x00; /* Class Unspecified, 7 Bit */
@@ -3632,10 +3644,10 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 
 	if (gsm_encoded && (written <= sms_text_capacity_gsm(160, offset))) {
 		template.submit.udl = written + (offset * 8 + 6) / 7;
-		pack_7bit_own_buf(gsm_encoded, written, offset, FALSE, NULL,
+		pack_7bit_own_buf(gsm_encoded, written, offset, false, NULL,
 					0, template.submit.ud + offset);
 
-		g_free(gsm_encoded);
+		l_free(gsm_encoded);
 		return sms_list_append(NULL, &template);
 	}
 
@@ -3643,7 +3655,7 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 		template.submit.udl = written + offset;
 		memcpy(template.submit.ud + offset, ucs2_encoded, written);
 
-		g_free(ucs2_encoded);
+		l_free(ucs2_encoded);
 		return sms_list_append(NULL, &template);
 	}
 
@@ -3689,7 +3701,7 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 
 			template.submit.udl = chunk + (offset * 8 + 6) / 7;
 			pack_7bit_own_buf(gsm_encoded + written, chunk,
-						offset, FALSE, NULL, 0,
+						offset, false, NULL, 0,
 						template.submit.ud + offset);
 		} else {
 			chunk = 140 - offset;
@@ -3718,7 +3730,7 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 		g_free(gsm_encoded);
 
 	if (ucs2_encoded)
-		g_free(ucs2_encoded);
+		l_free(ucs2_encoded);
 
 	if (left > 0) {
 		g_slist_free_full(r, g_free);
@@ -3746,6 +3758,34 @@ GSList *sms_text_prepare(const char *to, const char *utf8, guint16 ref,
 	return sms_text_prepare_with_alphabet(to, utf8, ref, use_16bit,
 						use_delivery_reports,
 						SMS_ALPHABET_DEFAULT);
+}
+
+GSList *sms_pdu_prepare(const unsigned char *smsc_pdu, guint8 smsc_len,
+						const unsigned char *pdu, guint8 pdu_len)
+{
+	struct sms sms_msg;
+	int offset = 0;
+
+	if (sms_decode_address_field(smsc_pdu, smsc_len, &offset, TRUE, &sms_msg.sc_addr) == FALSE) {
+		DBG("error decoding smsc pdu");
+		return NULL;
+	}
+	if (offset != smsc_len) {
+		DBG("error decoding smsc pdu: decoded %d bytes, but got %d", offset, smsc_len);
+		return NULL;
+	}
+
+	if (pdu_len > sizeof(sms_msg.send_raw.pdu)) {
+		DBG("pdu is too long. pdu_len=%d, max size=%d", pdu_len, sizeof(sms_msg.send_raw.pdu));
+		return NULL;
+	}
+
+	memset(&sms_msg, 0, sizeof(struct sms));
+	sms_msg.type = SMS_TYPE_SEND_RAW;
+	sms_msg.send_raw.pdu_len = pdu_len;
+	memcpy(sms_msg.send_raw.pdu, pdu, pdu_len);
+
+	return sms_list_append(NULL, &sms_msg);
 }
 
 gboolean cbs_dcs_decode(guint8 dcs, gboolean *udhi, enum sms_class *cls,
@@ -4093,7 +4133,7 @@ char *cbs_decode_text(GSList *cbs_list, char *iso639_lang)
 				taken = sms_udh_iter_get_udh_length(&iter) + 1;
 
 			unpack_7bit_own_buf(cbs->ud + taken, 82 - taken,
-						taken, FALSE, 2,
+						taken, false, 2,
 						NULL, 0,
 						(unsigned char *)iso639_lang);
 			iso639_lang[2] = '\0';
@@ -4102,7 +4142,7 @@ char *cbs_decode_text(GSList *cbs_list, char *iso639_lang)
 		}
 	}
 
-	buf = g_new(unsigned char, bufsize);
+	buf = l_new(unsigned char, bufsize);
 	bufsize = 0;
 
 	for (l = cbs_list; l; l = l->next) {
@@ -4126,7 +4166,7 @@ char *cbs_decode_text(GSList *cbs_list, char *iso639_lang)
 				sms_text_capacity_gsm(CBS_MAX_GSM_CHARS, taken);
 
 			unpack_7bit_own_buf(ud + taken, 82 - taken,
-						taken, FALSE, max_chars,
+						taken, false, max_chars,
 						&written, 0, unpacked);
 
 			i = iso639 ? 3 : 0;
@@ -4198,10 +4238,9 @@ char *cbs_decode_text(GSList *cbs_list, char *iso639_lang)
 	if (charset == SMS_CHARSET_7BIT)
 		utf8 = convert_gsm_to_utf8(buf, bufsize, NULL, NULL, 0);
 	else
-		utf8 = g_convert((char *) buf, bufsize, "UTF-8//TRANSLIT",
-					"UCS-2BE", NULL, NULL, NULL);
+		utf8 = l_utf8_from_ucs2be(buf, bufsize);
 
-	g_free(buf);
+	l_free(buf);
 	return utf8;
 }
 
@@ -4733,13 +4772,13 @@ char *ussd_decode(int dcs, int len, const unsigned char *data)
 	case SMS_CHARSET_7BIT:
 	{
 		long written;
-		unsigned char *unpacked = unpack_7bit(data, len, 0, TRUE, 0,
+		unsigned char *unpacked = unpack_7bit(data, len, 0, true, 0,
 							&written, 0);
 		if (unpacked == NULL)
 			return NULL;
 
 		utf8 = convert_gsm_to_utf8(unpacked, written, NULL, NULL, 0);
-		g_free(unpacked);
+		l_free(unpacked);
 
 		break;
 	}
@@ -4769,12 +4808,12 @@ gboolean ussd_encode(const char *str, long *items_written, unsigned char *pdu)
 
 	converted = convert_utf8_to_gsm(str, -1, NULL, &written, 0);
 	if (converted == NULL || written > 182) {
-		g_free(converted);
+		l_free(converted);
 		return FALSE;
 	}
 
-	pack_7bit_own_buf(converted, written, 0, TRUE, &num_packed, 0, pdu);
-	g_free(converted);
+	pack_7bit_own_buf(converted, written, 0, true, &num_packed, 0, pdu);
+	l_free(converted);
 
 	if (num_packed < 1)
 		return FALSE;

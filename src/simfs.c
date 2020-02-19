@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdio.h>
 
@@ -74,12 +73,10 @@ struct sim_fs_op {
 	struct ofono_sim_context *context;
 };
 
-static void sim_fs_op_free(gpointer pointer)
-{
-	struct sim_fs_op *node = pointer;
-	g_free(node->buffer);
-	g_free(node);
-}
+struct ofono_sim_context {
+	struct sim_fs *fs;
+	struct ofono_watchlist *file_watches;
+};
 
 struct sim_fs {
 	GQueue *op_q;
@@ -89,7 +86,18 @@ struct sim_fs {
 	struct ofono_sim *sim;
 	const struct ofono_sim_driver *driver;
 	GSList *contexts;
+	struct ofono_sim_aid_session *session;
+	int session_id;
+	unsigned int watch_id;
 };
+
+static void sim_fs_op_free(gpointer pointer)
+{
+	struct sim_fs_op *node = pointer;
+
+	g_free(node->buffer);
+	g_free(node);
+}
 
 void sim_fs_free(struct sim_fs *fs)
 {
@@ -113,17 +121,15 @@ void sim_fs_free(struct sim_fs *fs)
 	while (fs->contexts)
 		sim_fs_context_free(fs->contexts->data);
 
+	if (fs->watch_id)
+		__ofono_sim_remove_session_watch(fs->session, fs->watch_id);
+
 	g_free(fs);
 }
 
 struct file_watch {
 	struct ofono_watchlist_item item;
 	int ef;
-};
-
-struct ofono_sim_context {
-	struct sim_fs *fs;
-	struct ofono_watchlist *file_watches;
 };
 
 struct sim_fs *sim_fs_new(struct ofono_sim *sim,
@@ -156,6 +162,23 @@ struct ofono_sim_context *sim_fs_context_new(struct sim_fs *fs)
 	return context;
 }
 
+struct ofono_sim_context *sim_fs_context_new_with_aid(struct sim_fs *fs,
+		unsigned char *aid)
+{
+	struct ofono_sim_context *context = sim_fs_context_new(fs);
+
+	if (context == NULL)
+		return NULL;
+
+	context->fs->session = __ofono_sim_get_session_by_aid(fs->sim, aid);
+	if (!context->fs->session) {
+		sim_fs_context_free(context);
+		return NULL;
+	}
+
+	return context;
+}
+
 void sim_fs_context_free(struct ofono_sim_context *context)
 {
 	struct sim_fs *fs = context->fs;
@@ -171,6 +194,7 @@ void sim_fs_context_free(struct ofono_sim_context *context)
 
 			if (n == 0) {
 				op->cb = NULL;
+				op->context = NULL;
 
 				n += 1;
 				continue;
@@ -246,9 +270,11 @@ static void sim_fs_end_current(struct sim_fs *fs)
 
 	if (g_queue_get_length(fs->op_q) > 0)
 		fs->op_source = g_idle_add(sim_fs_op_next, fs);
+	else if (fs->watch_id) /* release the session if no pending reads */
+		__ofono_sim_remove_session_watch(fs->session, fs->watch_id);
 
 	if (fs->fd != -1) {
-		TFR(close(fs->fd));
+		L_TFR(close(fs->fd));
 		fs->fd = -1;
 	}
 
@@ -294,7 +320,7 @@ static gboolean cache_block(struct sim_fs *fs, int block, int block_len,
 				SIM_CACHE_HEADER_SIZE, SEEK_SET) == (off_t) -1)
 		return FALSE;
 
-	r = TFR(write(fs->fd, data, num_bytes));
+	r = L_TFR(write(fs->fd, data, num_bytes));
 
 	if (r != num_bytes)
 		return FALSE;
@@ -309,7 +335,7 @@ static gboolean cache_block(struct sim_fs *fs, int block, int block_len,
 	b = fs->bitmap[offset];
 	b |= 1 << bit;
 
-	r = TFR(write(fs->fd, &b, sizeof(b)));
+	r = L_TFR(write(fs->fd, &b, sizeof(b)));
 
 	if (r != sizeof(b))
 		return FALSE;
@@ -451,7 +477,7 @@ static gboolean sim_fs_op_read_block(gpointer user_data)
 		if (lseek(fs->fd, seekoff, SEEK_SET) == (off_t) -1)
 			break;
 
-		if (TFR(read(fs->fd, op->buffer + bufoff, toread)) != toread)
+		if (L_TFR(read(fs->fd, op->buffer + bufoff, toread)) != toread)
 			break;
 
 		op->current += 1;
@@ -543,7 +569,7 @@ static gboolean sim_fs_op_read_record(gpointer user)
 				SIM_CACHE_HEADER_SIZE, SEEK_SET) == (off_t) -1)
 			break;
 
-		if (TFR(read(fs->fd, buf, op->record_length)) !=
+		if (L_TFR(read(fs->fd, buf, op->record_length)) !=
 				op->record_length)
 			break;
 
@@ -634,17 +660,17 @@ static void sim_fs_op_cache_fileinfo(struct sim_fs *fs,
 	fileinfo[6] = file_status;
 
 	path = g_strdup_printf(SIM_CACHE_PATH, imsi, phase, op->id);
-	fs->fd = TFR(open(path, O_WRONLY | O_CREAT | O_TRUNC, SIM_CACHE_MODE));
+	fs->fd = L_TFR(open(path, O_WRONLY | O_CREAT | O_TRUNC, SIM_CACHE_MODE));
 	g_free(path);
 
 	if (fs->fd == -1)
 		return;
 
-	if (TFR(write(fs->fd, fileinfo, SIM_CACHE_HEADER_SIZE)) ==
+	if (L_TFR(write(fs->fd, fileinfo, SIM_CACHE_HEADER_SIZE)) ==
 			SIM_CACHE_HEADER_SIZE)
 		return;
 
-	TFR(close(fs->fd));
+	L_TFR(close(fs->fd));
 	fs->fd = -1;
 }
 
@@ -735,7 +761,7 @@ static gboolean sim_fs_op_check_cached(struct sim_fs *fs)
 	if (path == NULL)
 		return FALSE;
 
-	fd = TFR(open(path, O_RDWR));
+	fd = L_TFR(open(path, O_RDWR));
 	g_free(path);
 
 	if (fd == -1) {
@@ -747,7 +773,7 @@ static gboolean sim_fs_op_check_cached(struct sim_fs *fs)
 		return FALSE;
 	}
 
-	len = TFR(read(fd, fileinfo, SIM_CACHE_HEADER_SIZE));
+	len = L_TFR(read(fd, fileinfo, SIM_CACHE_HEADER_SIZE));
 
 	if (len != SIM_CACHE_HEADER_SIZE)
 		goto error;
@@ -801,8 +827,101 @@ static gboolean sim_fs_op_check_cached(struct sim_fs *fs)
 	return TRUE;
 
 error:
-	TFR(close(fd));
+	L_TFR(close(fd));
 	return FALSE;
+}
+
+static void sim_fs_read_session_cb(const struct ofono_error *error,
+		const unsigned char *sdata, int length, void *data)
+{
+	struct sim_fs *fs = data;
+	struct sim_fs_op *op = g_queue_peek_head(fs->op_q);
+	ofono_sim_file_read_cb_t cb;
+
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
+		sim_fs_op_error(fs);
+		return;
+	}
+
+	cb = op->cb;
+	cb(TRUE, length, 0, sdata, length, op->userdata);
+
+	sim_fs_end_current(fs);
+}
+
+static void session_read_info_cb(const struct ofono_error *error,
+					int filelength,
+					enum ofono_sim_file_structure structure,
+					int recordlength,
+					const unsigned char access[3],
+					unsigned char file_status,
+					void *data)
+{
+	struct sim_fs *fs = data;
+	struct sim_fs_op *op = g_queue_peek_head(fs->op_q);
+
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
+		sim_fs_op_error(fs);
+		return;
+	}
+
+	sim_fs_op_cache_fileinfo(fs, error, filelength, structure, recordlength,
+			access, file_status);
+
+	if (op->info_only) {
+		sim_fs_read_info_cb_t cb = op->cb;
+
+		cb(1, file_status, filelength, recordlength, op->userdata);
+
+		sim_fs_end_current(fs);
+		return;
+	}
+
+	if (op->structure == OFONO_SIM_FILE_STRUCTURE_TRANSPARENT) {
+		if (!fs->driver->session_read_binary) {
+			sim_fs_op_error(fs);
+			return;
+		}
+
+		fs->driver->session_read_binary(fs->sim, fs->session_id,
+				op->id, op->offset, filelength, op->path,
+				op->path_len, sim_fs_read_session_cb, fs);
+	} else {
+		if (!fs->driver->session_read_record) {
+			sim_fs_op_error(fs);
+			return;
+		}
+
+		fs->driver->session_read_record(fs->sim, fs->session_id,
+				op->id, op->offset, recordlength, op->path,
+				op->path_len, sim_fs_read_session_cb, fs);
+	}
+}
+
+static void session_destroy_cb(void *userdata)
+{
+	struct sim_fs *fs = userdata;
+
+	fs->watch_id = 0;
+}
+
+static void get_session_cb(ofono_bool_t active, int session_id,
+		void *data)
+{
+	struct sim_fs *fs = data;
+	struct sim_fs_op *op;
+
+	if (!active) {
+		sim_fs_op_error(fs);
+		return;
+	}
+
+	op = g_queue_peek_head(fs->op_q);
+
+	fs->session_id = session_id;
+
+	fs->driver->session_read_info(fs->sim, session_id, op->id, op->path,
+			op->path_len, session_read_info_cb, fs);
 }
 
 static gboolean sim_fs_op_next(gpointer user_data)
@@ -827,10 +946,22 @@ static gboolean sim_fs_op_next(gpointer user_data)
 		if (sim_fs_op_check_cached(fs))
 			return FALSE;
 
-		driver->read_file_info(fs->sim, op->id,
-					op->path_len ? op->path : NULL,
-					op->path_len,
-					sim_fs_op_info_cb, fs);
+		if (!fs->session) {
+			driver->read_file_info(fs->sim, op->id,
+						op->path_len ? op->path : NULL,
+						op->path_len,
+						sim_fs_op_info_cb, fs);
+		} else {
+			if (fs->watch_id)
+				fs->driver->session_read_info(fs->sim,
+						fs->session_id, op->id,
+						op->path, op->path_len,
+						session_read_info_cb, fs);
+			else
+				fs->watch_id = __ofono_sim_add_session_watch(
+						fs->session, get_session_cb,
+						fs, session_destroy_cb);
+		}
 	} else {
 		switch (op->structure) {
 		case OFONO_SIM_FILE_STRUCTURE_TRANSPARENT:
@@ -914,9 +1045,17 @@ int sim_fs_read(struct ofono_sim_context *context, int id,
 	if (fs->driver == NULL)
 		return -EINVAL;
 
-	if (fs->driver->read_file_info == NULL) {
-		cb(0, 0, 0, NULL, 0, data);
-		return -ENOSYS;
+	/* check driver support for session based read */
+	if (fs->session) {
+		if (!fs->driver->session_read_info) {
+			cb(0, 0, 0, NULL, 0, data);
+			return -ENOSYS;
+		}
+	} else {
+		if (!fs->driver->read_file_info) {
+			cb(0, 0, 0, NULL, 0, data);
+			return -ENOSYS;
+		}
 	}
 
 	if (fs->op_q == NULL)
@@ -1048,8 +1187,8 @@ char *sim_fs_get_cached_image(struct sim_fs *fs, int id)
 
 	path = g_strdup_printf(SIM_IMAGE_CACHE_PATH, imsi, phase, id);
 
-	TFR(stat(path, &st_buf));
-	fd = TFR(open(path, O_RDONLY));
+	L_TFR(stat(path, &st_buf));
+	fd = L_TFR(open(path, O_RDONLY));
 	g_free(path);
 
 	if (fd < 0)
@@ -1059,12 +1198,12 @@ char *sim_fs_get_cached_image(struct sim_fs *fs, int id)
 	buffer = g_try_new0(char, image_length + 1);
 
 	if (buffer == NULL) {
-		TFR(close(fd));
+		L_TFR(close(fd));
 		return NULL;
 	}
 
-	len = TFR(read(fd, buffer, image_length));
-	TFR(close(fd));
+	len = L_TFR(read(fd, buffer, image_length));
+	L_TFR(close(fd));
 
 	if (len != image_length) {
 		g_free(buffer);

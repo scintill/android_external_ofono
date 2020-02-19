@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,6 +34,8 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/voicecall.h>
+
+#include <drivers/common/call_list.h>
 
 #include "common.h"
 #include "hfp.h"
@@ -85,12 +86,12 @@ static GSList *find_dialing(GSList *calls)
 	GSList *c;
 
 	c = g_slist_find_custom(calls, GINT_TO_POINTER(CALL_STATUS_DIALING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 
 	if (c == NULL)
 		c = g_slist_find_custom(calls,
 					GINT_TO_POINTER(CALL_STATUS_ALERTING),
-					at_util_call_compare_by_status);
+					ofono_call_compare_by_status);
 
 	return c;
 }
@@ -125,10 +126,11 @@ static struct ofono_call *create_call(struct ofono_voicecall *vc, int type,
 	if (clip != 2) {
 		strncpy(call->phone_number.number, num,
 			OFONO_MAX_PHONE_NUMBER_LENGTH);
+		call->phone_number.number[OFONO_MAX_PHONE_NUMBER_LENGTH] = '\0';
 		call->phone_number.type = num_type;
 	}
 
-	d->calls = g_slist_insert_sorted(d->calls, call, at_util_call_compare);
+	d->calls = g_slist_insert_sorted(d->calls, call, ofono_call_compare);
 
 	call->clip_validity = clip;
 
@@ -401,6 +403,45 @@ static void hfp_dial(struct ofono_voicecall *vc,
 
 	g_free(cbd);
 
+	CALLBACK_WITH_FAILURE(cb, data);
+}
+
+static void hfp_dial_last(struct ofono_voicecall *vc, ofono_voicecall_cb_t cb,
+			void *data)
+{
+	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
+	struct cb_data *cbd = cb_data_new(cb, data);
+
+	cbd->user = vc;
+
+	if (g_at_chat_send(vd->chat, "AT+BLDN", none_prefix,
+				atd_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+
+	CALLBACK_WITH_FAILURE(cb, data);
+
+}
+
+static void hfp_dial_memory(struct ofono_voicecall *vc,
+				unsigned int memory_location,
+				ofono_voicecall_cb_t cb, void *data)
+{
+	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
+	struct cb_data *cbd = cb_data_new(cb, data);
+	char buf[256];
+
+	cbd->user = vc;
+	DBG("Calling memory location %d\n", memory_location);
+	snprintf(buf, sizeof(buf), "ATD>%d;", memory_location);
+
+	if (g_at_chat_send(vd->chat, buf, none_prefix,
+				atd_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+	DBG("at_chat_failed");
 	CALLBACK_WITH_FAILURE(cb, data);
 }
 
@@ -720,7 +761,7 @@ static void ccwa_notify(GAtResult *result, gpointer user_data)
 	/* CCWA can repeat, ignore if we already have an waiting call */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_WAITING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	/* some phones may send extra CCWA after active call is ended
@@ -729,7 +770,7 @@ static void ccwa_notify(GAtResult *result, gpointer user_data)
 	 */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 
@@ -772,7 +813,7 @@ static gboolean clip_timeout(gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 
 	if (l == NULL)
 		return FALSE;
@@ -801,12 +842,12 @@ static void ring_notify(GAtResult *result, gpointer user_data)
 	/* RING can repeat, ignore if we already have an incoming call */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	waiting = g_slist_find_custom(vd->calls,
 					GINT_TO_POINTER(CALL_STATUS_WAITING),
-					at_util_call_compare_by_status);
+					ofono_call_compare_by_status);
 
 	/* If we started receiving RINGS but have a waiting call, most
 	 * likely all other calls were dropped and we just didn't get
@@ -851,7 +892,7 @@ static void clip_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 
 	if (l == NULL) {
 		ofono_error("CLIP for unknown call");
@@ -967,7 +1008,7 @@ static void ciev_callsetup_notify(struct ofono_voicecall *vc,
 
 	waiting = g_slist_find_custom(vd->calls,
 					GINT_TO_POINTER(CALL_STATUS_WAITING),
-					at_util_call_compare_by_status);
+					ofono_call_compare_by_status);
 
 	/* This is a truly bizarre case not covered at all by the specification
 	 * (yes, they are complete idiots).  Here we assume the other side is
@@ -1046,7 +1087,7 @@ static void ciev_callsetup_notify(struct ofono_voicecall *vc,
 	{
 		GSList *o = g_slist_find_custom(vd->calls,
 					GINT_TO_POINTER(CALL_STATUS_DIALING),
-					at_util_call_compare_by_status);
+					ofono_call_compare_by_status);
 
 		if (o) {
 			struct ofono_call *call = o->data;
@@ -1263,11 +1304,13 @@ static void hfp_voicecall_remove(struct ofono_voicecall *vc)
 	g_free(vd);
 }
 
-static struct ofono_voicecall_driver driver = {
+static const struct ofono_voicecall_driver driver = {
 	.name			= "hfpmodem",
 	.probe			= hfp_voicecall_probe,
 	.remove			= hfp_voicecall_remove,
 	.dial			= hfp_dial,
+	.dial_last		= hfp_dial_last,
+	.dial_memory		= hfp_dial_memory,
 	.answer			= hfp_answer,
 	.hangup_active		= hfp_hangup,
 	.hold_all_active	= hfp_hold_all_active,

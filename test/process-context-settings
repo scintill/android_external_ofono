@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import os
+import sys
 import dbus
 
 bus = dbus.SystemBus()
@@ -23,32 +24,37 @@ for path, properties in modems:
 		if properties["Active"] == dbus.Boolean(0):
 			continue
 
-		print("Configuring %s" % (path))
+		print("Configuring %s" % (path), file=sys.stderr)
 
 		settings = properties["Settings"]
-
 		interface = settings["Interface"]
-		address = settings["Address"]
-		try:
-			gateway = settings["Gateway"]
-		except:
-			gateway = "0.0.0.0";
 
 		if settings["Method"] == "dhcp":
-			print("    Run DHCP on interface %s" % (interface))
+			print("    Run DHCP on interface %s" % (interface),
+				file=sys.stderr)
 		else:
-			print("    Interface is %s" % (interface))
-			print("    IP address is %s" % (address))
-			print("    Gateway is %s" % (gateway))
+			address = settings["Address"]
+			try:
+				gateway = settings["Gateway"]
+			except:
+				gateway = "0.0.0.0";
 
-			cmd = "ifconfig " + interface + " " + address
-			cmd += " netmask 255.255.255.255"
+			print("    Interface is %s" % (interface),
+				file=sys.stderr)
+			print("    IP address is %s" % (address),
+				file=sys.stderr)
+			print("    Gateway is %s" % (gateway),
+				file=sys.stderr)
+
+			cmd = "ip address add dev " + interface + " " + address
+			cmd += "/32"
 			os.system(cmd);
 
 			for i in settings["DomainNameServers"]:
-				print("    Nameserver is %s" % (i))
+				print("    Nameserver is %s" % (i),
+					file=sys.stderr)
 
-				cmd = "route add -host " + i
+				cmd = "ip route add  " + i
 				cmd +=" dev " + interface
 				os.system(cmd);
-		print('')
+		print('', file=sys.stderr)

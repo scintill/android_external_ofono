@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,6 +33,8 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/voicecall.h>
+
+#include <drivers/common/call_list.h>
 
 #include "gatchat.h"
 #include "gatresult.h"
@@ -107,7 +108,7 @@ static struct ofono_call *create_call(struct ofono_voicecall *vc, int type,
 
 	call->clip_validity = clip;
 
-	d->calls = g_slist_insert_sorted(d->calls, call, at_util_call_compare);
+	d->calls = g_slist_insert_sorted(d->calls, call, ofono_call_compare);
 
 	return call;
 }
@@ -135,7 +136,7 @@ static void xcallstat_notify(GAtResult *result, gpointer user_data)
 		return;
 
 	l = g_slist_find_custom(vd->calls, GINT_TO_POINTER(id),
-				at_util_call_compare_by_id);
+				ofono_call_compare_by_id);
 
 	if (l == NULL && status != CALL_STATUS_DIALING &&
 				status != CALL_STATUS_INCOMING &&
@@ -545,12 +546,12 @@ static void cring_notify(GAtResult *result, gpointer user_data)
 	 */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_WAITING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CRING received before XCALLSTAT!!!");
 		return;
@@ -589,7 +590,7 @@ static void clip_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CLIP for unknown call");
 		return;
@@ -649,7 +650,7 @@ static void cnap_notify(GAtResult *result, gpointer user_data)
 	 */
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CNAP for unknown call");
 		return;
@@ -695,7 +696,7 @@ static void ccwa_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_WAITING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CCWA received before XCALLSTAT!!!");
 		return;
@@ -773,7 +774,7 @@ static void xcolp_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(call_id),
-				at_util_call_compare_by_id);
+				ofono_call_compare_by_id);
 	if (l == NULL) {
 		ofono_error("XCOLP for unknown call");
 		return;
@@ -1019,7 +1020,7 @@ static void ifx_voicecall_remove(struct ofono_voicecall *vc)
 	g_free(vd);
 }
 
-static struct ofono_voicecall_driver driver = {
+static const struct ofono_voicecall_driver driver = {
 	.name			= "ifxmodem",
 	.probe			= ifx_voicecall_probe,
 	.remove			= ifx_voicecall_remove,

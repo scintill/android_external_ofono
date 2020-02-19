@@ -46,6 +46,16 @@ Methods		dict GetProperties()
 					 [service].Error.InvalidFormat
 					 [service].Error.Failed
 
+		object SendPdu(array{byte} smscPdu, array{byte} pdu)
+
+			Send a binary SMS PDU.  If the message could be queued
+			successfully, this method returns an object path to the
+			created Message object.
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.InvalidFormat
+					 [service].Error.Failed
+
 Signals		PropertyChanged(string name, variant value)
 
 			This signal indicates a changed value of the given
@@ -62,6 +72,13 @@ Signals		PropertyChanged(string name, variant value)
 
 			New incoming text SMS received. Info has Sender,
 			LocalSentTime, and SentTime information.
+
+		IncomingPdu(array{byte} pdu, uint8 tpdu_len)
+
+			New incoming SMS PDU received. tpdu_len is the length of the
+			data after the SMSC addr. All PDUs are signaled, which may
+			mean some of these signals will overlap with content provided by
+			IncomingMessage, and that this may provide SMSs that IncomingMessage does not.
 
 		MessageAdded(object path, dict properties)
 
@@ -104,6 +121,16 @@ Properties	string ServiceCenterAddress
 				"turkish" - Turkish alphabet
 				"spanish" - Spanish alphabet
 				"portuguese" - Portuguese alphabet
+				"bengali" - Bengali alphabet
+				"gujarati" - Gujarati alphabet
+				"hindi" - Hindi alphabet
+				"kannada" - Kannada alphabet
+				"malayalam" - Malayalam alphabet
+				"oriya" - Oriya alphabet
+				"punjabi"- Punjabi alphabet
+				"tamil" - Tamil alphabet
+				"telugu" - Telugu alphabet
+				"urdu" - Urdu alphabet
 
 			The standard, language-specific alphabets are defined
 			in 3GPP TS23.038, Annex A.  By default, oFono uses

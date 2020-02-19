@@ -170,6 +170,26 @@ static const char *sms_alphabet_to_string(enum sms_alphabet alphabet)
 		return "spanish";
 	case SMS_ALPHABET_PORTUGUESE:
 		return "portuguese";
+	case SMS_ALPHABET_BENGALI:
+		return "bengali";
+	case SMS_ALPHABET_GUJARATI:
+                return "gujarati";
+	case SMS_ALPHABET_HINDI:
+		return "hindi";
+	case SMS_ALPHABET_KANNADA:
+		return "kannada";
+	case SMS_ALPHABET_MALAYALAM:
+		return "malayalam";
+	case SMS_ALPHABET_ORIYA:
+		return "oriya";
+	case SMS_ALPHABET_PUNJABI:
+		return "punjabi";
+	case SMS_ALPHABET_TAMIL:
+		return "tamil";
+	case SMS_ALPHABET_TELUGU:
+		return "telugu";
+	case SMS_ALPHABET_URDU:
+		return "urdu";
 	case SMS_ALPHABET_DEFAULT:
 		return "default";
 	}
@@ -188,6 +208,26 @@ static gboolean sms_alphabet_from_string(const char *str,
 		*alphabet = SMS_ALPHABET_SPANISH;
 	else if (g_str_equal(str, "portuguese"))
 		*alphabet = SMS_ALPHABET_PORTUGUESE;
+	else if (g_str_equal(str, "bengali"))
+                *alphabet = SMS_ALPHABET_BENGALI;
+	else if (g_str_equal(str, "gujarati"))
+                *alphabet = SMS_ALPHABET_GUJARATI;
+	else if (g_str_equal(str, "hindi"))
+		*alphabet = SMS_ALPHABET_HINDI;
+	else if (g_str_equal(str, "kannada"))
+		*alphabet = SMS_ALPHABET_KANNADA;
+	else if (g_str_equal(str, "malayalam"))
+		*alphabet = SMS_ALPHABET_MALAYALAM;
+	else if (g_str_equal(str, "oriya"))
+		*alphabet = SMS_ALPHABET_ORIYA;
+	else if (g_str_equal(str, "punjabi"))
+		*alphabet = SMS_ALPHABET_PUNJABI;
+	else if (g_str_equal(str, "tamil"))
+		*alphabet = SMS_ALPHABET_TAMIL;
+	else if (g_str_equal(str, "telugu"))
+		*alphabet = SMS_ALPHABET_TELUGU;
+	else if (g_str_equal(str, "urdu"))
+		*alphabet = SMS_ALPHABET_URDU;
 	else
 		return FALSE;
 
@@ -782,6 +822,8 @@ static void netreg_status_watch(int status, int lac, int ci, int tech,
 	switch (status) {
 	case NETWORK_REGISTRATION_STATUS_REGISTERED:
 	case NETWORK_REGISTRATION_STATUS_ROAMING:
+	case NETWORK_REGISTRATION_STATUS_REGISTERED_SMS_EUTRAN:
+	case NETWORK_REGISTRATION_STATUS_ROAMING_SMS_EUTRAN:
 		sms->registered = TRUE;
 		break;
 	default:
@@ -999,6 +1041,51 @@ static DBusMessage *sms_send_message(DBusConnection *conn, DBusMessage *msg,
 	return NULL;
 }
 
+/*
+ * Deliver a raw SMS PDU message [D-Bus SendPdu()]
+ *
+ * @conn: D-Bus connection
+ * @msg: message data (pdu byte array)
+ * @data: SMS object to use for transmission
+ *
+ */
+static DBusMessage *sms_send_pdu(DBusConnection *conn, DBusMessage *msg,
+								void *data)
+{
+	struct ofono_sms *sms = data;
+	unsigned char *smsc;
+	unsigned char *pdu;
+	dbus_int32_t smsc_len;
+	dbus_int32_t pdu_len;
+	GSList *msg_list;
+	unsigned int flags;
+	int err;
+
+	if (!dbus_message_get_args(msg, NULL,
+						DBUS_TYPE_ARRAY, DBUS_TYPE_BYTE, &smsc, &smsc_len,
+						DBUS_TYPE_ARRAY, DBUS_TYPE_BYTE, &pdu, &pdu_len,
+						DBUS_TYPE_INVALID))
+		return __ofono_error_invalid_args(msg);
+
+	msg_list = sms_pdu_prepare(smsc, (guint8) smsc_len, pdu, (guint8) pdu_len);
+
+	if (msg_list == NULL)
+		return __ofono_error_invalid_format(msg);
+
+	flags = OFONO_SMS_SUBMIT_FLAG_RETRY;
+	flags |= OFONO_SMS_SUBMIT_FLAG_EXPOSE_DBUS;
+
+	err = __ofono_sms_txq_submit(sms, msg_list, flags, NULL,
+								message_queued, msg);
+
+	g_slist_free_full(msg_list, g_free);
+
+	if (err < 0)
+		return __ofono_error_failed(msg);
+
+	return NULL;
+}
+
 static DBusMessage *sms_get_messages(DBusConnection *conn, DBusMessage *msg,
 					void *data)
 {
@@ -1116,6 +1203,10 @@ static const GDBusMethodTable sms_manager_methods[] = {
 			GDBUS_ARGS({ "to", "s" }, { "text", "s" }),
 			GDBUS_ARGS({ "path", "o" }),
 			sms_send_message) },
+	{ GDBUS_ASYNC_METHOD("SendPdu",
+			GDBUS_ARGS({ "smsc", "ay"}, { "pdu", "ay" }),
+			GDBUS_ARGS({ "path", "o" }),
+			sms_send_pdu) },
 	{ GDBUS_METHOD("GetMessages",
 			NULL, GDBUS_ARGS({ "messages", "a(oa{sv})" }),
 			sms_get_messages) },
@@ -1125,6 +1216,8 @@ static const GDBusMethodTable sms_manager_methods[] = {
 static const GDBusSignalTable sms_manager_signals[] = {
 	{ GDBUS_SIGNAL("PropertyChanged",
 			GDBUS_ARGS({ "name", "s" }, { "value", "v" })) },
+	{ GDBUS_SIGNAL("IncomingPdu",
+			GDBUS_ARGS({ "pdu", "ay" }, { "tpdu_len", "y"})) },
 	{ GDBUS_SIGNAL("IncomingMessage",
 			GDBUS_ARGS({ "message", "s" }, { "info", "a{sv}" })) },
 	{ GDBUS_SIGNAL("ImmediateMessage",
@@ -1282,6 +1375,32 @@ static void dispatch_text_message(struct ofono_sms *sms,
 
 	__ofono_history_sms_received(modem, uuid, str, &remote, &local,
 					message);
+}
+
+static void sms_pdu_notify(struct ofono_sms *sms,
+						   const unsigned char *pdu,
+						   guint8 pdu_len, guint8 tpdu_len)
+{
+	DBusMessage *signal;
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = __ofono_atom_get_path(sms->atom);
+	DBusMessageIter iter, array;
+
+	signal = dbus_message_new_signal(path, OFONO_MESSAGE_MANAGER_INTERFACE,
+									 "IncomingPdu");
+
+	if (signal == NULL)
+		return;
+
+	dbus_message_iter_init_append(signal, &iter);
+
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, DBUS_TYPE_BYTE_AS_STRING, &array);
+	dbus_message_iter_append_fixed_array(&array, DBUS_TYPE_BYTE, &pdu, pdu_len);
+	dbus_message_iter_close_container(&iter, &array);
+
+	dbus_message_iter_append_basic(&iter, DBUS_TYPE_BYTE, &tpdu_len);
+
+	g_dbus_send_message(conn, signal);
 }
 
 static void sms_dispatch(struct ofono_sms *sms, GSList *sms_list)
@@ -1477,6 +1596,8 @@ void ofono_sms_deliver_notify(struct ofono_sms *sms, const unsigned char *pdu,
 	struct sms s;
 	enum sms_class cls;
 
+	sms_pdu_notify(sms, pdu, len, tpdu_len);
+
 	DBG("len %d tpdu len %d", len, tpdu_len);
 
 	if (!sms_decode(pdu, len, FALSE, tpdu_len, &s)) {
@@ -1620,6 +1741,8 @@ void ofono_sms_status_notify(struct ofono_sms *sms, const unsigned char *pdu,
 {
 	struct sms s;
 	enum sms_class cls;
+
+	sms_pdu_notify(sms, pdu, len, tpdu_len);
 
 	DBG("len %d tpdu len %d", len, tpdu_len);
 

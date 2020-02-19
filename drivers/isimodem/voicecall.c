@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -228,7 +227,7 @@ static void isi_call_any_address_sb_proc(struct isi_voicecall *ivc,
 
 	call->addr_type = type | 0x80;
 	call->presentation = pres;
-	strncpy(call->address, addr, sizeof(call->address));
+	strncpy(call->address, addr, sizeof(call->address) - 1);
 
 	g_free(addr);
 }
@@ -1935,7 +1934,7 @@ static void isi_remove(struct ofono_voicecall *call)
 	g_free(data);
 }
 
-static struct ofono_voicecall_driver driver = {
+static const struct ofono_voicecall_driver driver = {
 	.name			= "isimodem",
 	.probe			= isi_probe,
 	.remove			= isi_remove,

@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,6 +33,8 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/voicecall.h>
+#include <drivers/common/call_list.h>
+
 #include "vendor.h"
 
 #include "gatchat.h"
@@ -132,7 +133,7 @@ static struct ofono_call *create_call(struct ofono_voicecall *vc, int type,
 	call->clip_validity = clip;
 	call->cnap_validity = CNAP_VALIDITY_NOT_AVAILABLE;
 
-	d->calls = g_slist_insert_sorted(d->calls, call, at_util_call_compare);
+	d->calls = g_slist_insert_sorted(d->calls, call, ofono_call_compare);
 
 	return call;
 }
@@ -265,14 +266,17 @@ poll_again:
 						poll_clcc, vc);
 }
 
+static void send_clcc(struct voicecall_data *vd, struct ofono_voicecall *vc)
+{
+	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix, clcc_poll_cb, vc, NULL);
+}
+
 static gboolean poll_clcc(gpointer user_data)
 {
 	struct ofono_voicecall *vc = user_data;
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-				clcc_poll_cb, vc, NULL);
-
+	send_clcc(vd, vc);
 	vd->clcc_source = 0;
 
 	return FALSE;
@@ -298,8 +302,7 @@ static void generic_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		}
 	}
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, req->vc, NULL);
+	send_clcc(vd, req->vc);
 
 	/* We have to callback after we schedule a poll if required */
 	req->cb(&error, req->data);
@@ -317,8 +320,7 @@ static void release_id_cb(gboolean ok, GAtResult *result,
 	if (ok)
 		vd->local_release = 1 << req->id;
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, req->vc, NULL);
+	send_clcc(vd, req->vc);
 
 	/* We have to callback after we schedule a poll if required */
 	req->cb(&error, req->data);
@@ -660,13 +662,13 @@ static void ring_notify(GAtResult *result, gpointer user_data)
 	/* See comment in CRING */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_WAITING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	/* RING can repeat, ignore if we already have an incoming call */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	/* Generate an incoming call of unknown type */
@@ -698,13 +700,13 @@ static void cring_notify(GAtResult *result, gpointer user_data)
 	 */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_WAITING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	/* CRING can repeat, ignore if we already have an incoming call */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	g_at_result_iter_init(&iter, result);
@@ -748,7 +750,7 @@ static void clip_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CLIP for unknown call");
 		return;
@@ -810,7 +812,7 @@ static void cdip_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CDIP for unknown call");
 		return;
@@ -859,7 +861,7 @@ static void cnap_notify(GAtResult *result, gpointer user_data)
 
 	l = g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_INCOMING),
-				at_util_call_compare_by_status);
+				ofono_call_compare_by_status);
 	if (l == NULL) {
 		ofono_error("CNAP for unknown call");
 		return;
@@ -913,7 +915,7 @@ static void ccwa_notify(GAtResult *result, gpointer user_data)
 	/* Some modems resend CCWA, ignore it the second time around */
 	if (g_slist_find_custom(vd->calls,
 				GINT_TO_POINTER(CALL_STATUS_WAITING),
-				at_util_call_compare_by_status))
+				ofono_call_compare_by_status))
 		return;
 
 	g_at_result_iter_init(&iter, result);
@@ -963,8 +965,7 @@ static void no_carrier_notify(GAtResult *result, gpointer user_data)
 	struct ofono_voicecall *vc = user_data;
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, vc, NULL);
+	send_clcc(vd, vc);
 }
 
 static void no_answer_notify(GAtResult *result, gpointer user_data)
@@ -972,8 +973,7 @@ static void no_answer_notify(GAtResult *result, gpointer user_data)
 	struct ofono_voicecall *vc = user_data;
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, vc, NULL);
+	send_clcc(vd, vc);
 }
 
 static void busy_notify(GAtResult *result, gpointer user_data)
@@ -985,8 +985,7 @@ static void busy_notify(GAtResult *result, gpointer user_data)
 	 * or UDUB on the other side
 	 * TODO: Handle UDUB or other conditions somehow
 	 */
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, vc, NULL);
+	send_clcc(vd, vc);
 }
 
 static void cssi_notify(GAtResult *result, gpointer user_data)
@@ -1120,6 +1119,7 @@ static int at_voicecall_probe(struct ofono_voicecall *vc, unsigned int vendor,
 
 	switch (vd->vendor) {
 	case OFONO_VENDOR_QUALCOMM_MSM:
+	case OFONO_VENDOR_SIMCOM:
 		g_at_chat_send(vd->chat, "AT+COLP=0", NULL, NULL, NULL, NULL);
 		break;
 	default:
@@ -1154,7 +1154,7 @@ static void at_voicecall_remove(struct ofono_voicecall *vc)
 	g_free(vd);
 }
 
-static struct ofono_voicecall_driver driver = {
+static const struct ofono_voicecall_driver driver = {
 	.name			= "atmodem",
 	.probe			= at_voicecall_probe,
 	.remove			= at_voicecall_remove,

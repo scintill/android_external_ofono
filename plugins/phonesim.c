@@ -61,6 +61,7 @@
 #include <ofono/gnss.h>
 #include <ofono/handsfree.h>
 #include <ofono/siri.h>
+#include <ofono/sim-auth.h>
 
 #include <drivers/atmodem/vendor.h>
 #include <drivers/atmodem/atutil.h>
@@ -160,9 +161,7 @@ static void phonesim_activate_primary(struct ofono_gprs_context *gc,
 		break;
 	}
 
-	if (ctx->apn)
-		snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"",
-				ctx->apn);
+	snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"", ctx->apn);
 
 	/* Assume always succeeds */
 	if (g_at_chat_send(gcd->chat, buf, none_prefix, NULL, NULL, NULL) == 0)
@@ -802,6 +801,7 @@ static void phonesim_set_online(struct ofono_modem *modem, ofono_bool_t online,
 				set_online_cb, cbd, g_free) > 0)
 		return;
 
+	g_free(cbd);
 	CALLBACK_WITH_FAILURE(cb, user_data);
 }
 
@@ -860,6 +860,7 @@ static void phonesim_post_sim(struct ofono_modem *modem)
 		ofono_sms_create(modem, 0, "atmodem", data->chat);
 
 	ofono_radio_settings_create(modem, 0, "phonesim", data->chat);
+	ofono_sim_auth_create(modem);
 }
 
 static void phonesim_post_online(struct ofono_modem *modem)

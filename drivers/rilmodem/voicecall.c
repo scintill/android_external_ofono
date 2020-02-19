@@ -25,7 +25,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,6 +37,8 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/voicecall.h>
+
+#include <drivers/common/call_list.h>
 
 #include <gril/gril.h>
 
@@ -115,20 +116,6 @@ done:
 	DBG("Call %d ended with reason %d", reqdata->id, reason);
 
 	ofono_voicecall_disconnected(vc, reqdata->id, reason, NULL);
-}
-
-static int call_compare(gconstpointer a, gconstpointer b)
-{
-	const struct ofono_call *ca = a;
-	const struct ofono_call *cb = b;
-
-	if (ca->id < cb->id)
-		return -1;
-
-	if (ca->id > cb->id)
-		return 1;
-
-	return 0;
 }
 
 static void clcc_poll_cb(struct ril_msg *message, gpointer user_data)
@@ -209,7 +196,7 @@ static void clcc_poll_cb(struct ril_msg *message, gpointer user_data)
 			call->id, call->status, call->type,
 			call->phone_number.number, call->name);
 
-		calls = g_slist_insert_sorted(calls, call, call_compare);
+		calls = g_slist_insert_sorted(calls, call, ofono_call_compare);
 	}
 
 no_calls:
@@ -856,7 +843,7 @@ void ril_voicecall_remove(struct ofono_voicecall *vc)
 	g_free(vd);
 }
 
-static struct ofono_voicecall_driver driver = {
+static const struct ofono_voicecall_driver driver = {
 	.name			= RILMODEM,
 	.probe			= ril_voicecall_probe,
 	.remove			= ril_voicecall_remove,

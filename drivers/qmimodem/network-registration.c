@@ -42,6 +42,15 @@ struct netreg_data {
 	struct qmi_service *nas;
 	struct ofono_network_operator operator;
 	uint8_t current_rat;
+	int lac;
+	int cellid;
+	bool is_roaming;
+};
+
+enum roaming_status {
+	ROAMING_STATUS_OFF,
+	ROAMING_STATUS_ON,
+	ROAMING_STATUS_NO_CHANGE,
 };
 
 static bool extract_ss_info_time(
@@ -78,11 +87,12 @@ static bool extract_ss_info_time(
 
 static bool extract_ss_info(struct qmi_result *result, int *status,
 				int *lac, int *cellid, int *tech,
+				enum roaming_status *roaming,
 				struct ofono_network_operator *operator)
 {
 	const struct qmi_nas_serving_system *ss;
 	const struct qmi_nas_current_plmn *plmn;
-	uint8_t i, roaming;
+	uint8_t i, roaming_status;
 	uint16_t value16, len, opname_len;
 	uint32_t value32;
 
@@ -92,7 +102,24 @@ static bool extract_ss_info(struct qmi_result *result, int *status,
 	if (!ss)
 		return false;
 
-	*status = ss->status;
+	/* When connecting to a cell, the modem tells to early it's registered,
+	 * event it hasn't yet received a location update complete */
+	switch (ss->status) {
+	case NETWORK_REGISTRATION_STATUS_REGISTERED:
+	case NETWORK_REGISTRATION_STATUS_ROAMING:
+		if (ss->cs_state == 0 && ss->ps_state == 0) {
+			ofono_error("qmimodem BUG: reported registering state to early.");
+			*status = NETWORK_REGISTRATION_STATUS_SEARCHING;
+		} else
+			*status = ss->status;
+		break;
+	case NETWORK_REGISTRATION_STATUS_DENIED:
+	case NETWORK_REGISTRATION_STATUS_NOT_REGISTERED:
+	case NETWORK_REGISTRATION_STATUS_SEARCHING:
+	case NETWORK_REGISTRATION_STATUS_UNKNOWN:
+		*status = ss->status;
+		break;
+	}
 
 	DBG("serving system status %d", ss->status);
 
@@ -104,10 +131,13 @@ static bool extract_ss_info(struct qmi_result *result, int *status,
 		*tech = qmi_nas_rat_to_tech(ss->radio_if[i]);
 	}
 
+	*roaming = ROAMING_STATUS_NO_CHANGE;
 	if (qmi_result_get_uint8(result, QMI_NAS_RESULT_ROAMING_STATUS,
-								&roaming)) {
-		if (ss->status == 1 && roaming == 0)
-			*status = NETWORK_REGISTRATION_STATUS_ROAMING;
+							&roaming_status)) {
+		if (roaming_status == 0)
+			*roaming = ROAMING_STATUS_ON;
+		else if (roaming_status == 1)
+			*roaming = ROAMING_STATUS_OFF;
 	}
 
 	if (!operator)
@@ -149,9 +179,35 @@ static bool extract_ss_info(struct qmi_result *result, int *status,
 	else
 		*cellid = -1;
 
-	DBG("lac %d cellid %d tech %d", *lac, *cellid, *tech);
+	DBG("roaming %u lac %d cellid %d tech %d", *roaming, *lac, *cellid,
+									*tech);
 
 	return true;
+}
+
+static int remember_ss_info(struct netreg_data *data, int status, int lac,
+					int cellid, enum roaming_status roaming)
+{
+	if (roaming == ROAMING_STATUS_ON)
+		data->is_roaming = true;
+	else if (roaming == ROAMING_STATUS_OFF)
+		data->is_roaming = false;
+
+	if (status == QMI_NAS_REGISTRATION_STATE_REGISTERED) {
+		if (lac >= 0)
+			data->lac = lac;
+		if (cellid >= 0)
+			data->cellid = cellid;
+	} else {
+		data->lac = -1;
+		data->cellid = -1;
+	}
+
+	if (status == QMI_NAS_REGISTRATION_STATE_REGISTERED &&
+							data->is_roaming)
+		status = NETWORK_REGISTRATION_STATUS_ROAMING;
+
+	return status;
 }
 
 static void ss_info_notify(struct qmi_result *result, void *user_data)
@@ -160,17 +216,21 @@ static void ss_info_notify(struct qmi_result *result, void *user_data)
 	struct ofono_network_time net_time;
 	struct netreg_data *data = ofono_netreg_get_data(netreg);
 	int status, lac, cellid, tech;
+	enum roaming_status roaming;
 
 	DBG("");
 
 	if (extract_ss_info_time(result, &net_time))
 		ofono_netreg_time_notify(netreg, &net_time);
 
-	if (!extract_ss_info(result, &status, &lac, &cellid, &tech,
+	if (!extract_ss_info(result, &status, &lac, &cellid, &tech, &roaming,
 							&data->operator))
 		return;
 
-	ofono_netreg_status_notify(netreg, status, lac, cellid, tech);
+	status = remember_ss_info(data, status, lac, cellid, roaming);
+
+	ofono_netreg_status_notify(netreg, status, data->lac, data->cellid,
+									tech);
 }
 
 static void get_ss_info_cb(struct qmi_result *result, void *user_data)
@@ -179,6 +239,7 @@ static void get_ss_info_cb(struct qmi_result *result, void *user_data)
 	ofono_netreg_status_cb_t cb = cbd->cb;
 	struct netreg_data *data = cbd->user;
 	int status, lac, cellid, tech;
+	enum roaming_status roaming;
 
 	DBG("");
 
@@ -187,13 +248,16 @@ static void get_ss_info_cb(struct qmi_result *result, void *user_data)
 		return;
 	}
 
-	if (!extract_ss_info(result, &status, &lac, &cellid, &tech,
+	if (!extract_ss_info(result, &status, &lac, &cellid, &tech, &roaming,
 							&data->operator)) {
 		CALLBACK_WITH_FAILURE(cb, -1, -1, -1, -1, cbd->data);
 		return;
 	}
 
-	CALLBACK_WITH_SUCCESS(cb, status, lac, cellid, tech, cbd->data);
+	status = remember_ss_info(data, status, lac, cellid, roaming);
+
+	CALLBACK_WITH_SUCCESS(cb, status, data->lac, data->cellid, tech,
+								cbd->data);
 }
 
 static void qmi_registration_status(struct ofono_netreg *netreg,
@@ -332,6 +396,7 @@ static void register_net_cb(struct qmi_result *result, void *user_data)
 	struct cb_data *cbd = user_data;
 	ofono_netreg_register_cb_t cb = cbd->cb;
 	uint16_t error;
+	int cme_error;
 
 	DBG("");
 
@@ -341,7 +406,8 @@ static void register_net_cb(struct qmi_result *result, void *user_data)
 			goto done;
 		}
 
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
+		cme_error = qmi_error_to_ofono_cme(error);
+		CALLBACK_WITH_CME_ERROR(cb, cme_error, cbd->data);
 		return;
 	}
 
@@ -578,6 +644,9 @@ static int qmi_netreg_probe(struct ofono_netreg *netreg,
 	data->operator.tech = -1;
 
 	data->current_rat = QMI_NAS_NETWORK_RAT_NO_CHANGE;
+	data->is_roaming = false;
+	data->lac = -1;
+	data->cellid = -1;
 
 	ofono_netreg_set_data(netreg, data);
 
@@ -602,7 +671,7 @@ static void qmi_netreg_remove(struct ofono_netreg *netreg)
 	g_free(data);
 }
 
-static struct ofono_netreg_driver driver = {
+static const struct ofono_netreg_driver driver = {
 	.name			= "qmimodem",
 	.probe			= qmi_netreg_probe,
 	.remove			= qmi_netreg_remove,
