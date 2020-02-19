@@ -70,19 +70,21 @@ include $(CLEAR_VARS)
 			gril/parcel.c plugins/infineon.c plugins/ril.c plugins/rildev.c \
 			plugins/ril_intel.c
 		OFONO_PLUGINS += rildev ril infineon ril_intel rilmodem
-	else ifeq ($(BOARD_OFONO_DRIVER),gobi)
-		LOCAL_SRC_FILES += \
-			drivers/qmimodem/devinfo.c drivers/qmimodem/gprs.c \
-			drivers/qmimodem/gprs-context.c drivers/qmimodem/location-reporting.c \
-			drivers/qmimodem/nas.c drivers/qmimodem/network-registration.c \
-			drivers/qmimodem/qmi.c drivers/qmimodem/qmimodem.c \
-			drivers/qmimodem/radio-settings.c drivers/qmimodem/sim.c \
-			drivers/qmimodem/sim-legacy.c drivers/qmimodem/sms.c \
-			drivers/qmimodem/ussd.c drivers/qmimodem/voicecall.c plugins/gobi.c \
-			drivers/qmimodem/voice_generated.c drivers/qmimodem/voice.c \
-			drivers/qmimodem/netmon.c \
-			plugins/gobidev.c
-		OFONO_PLUGINS += gobidev gobi qmimodem
+	else
+		ifeq ($(BOARD_OFONO_DRIVER),gobi)
+			LOCAL_SRC_FILES += \
+				drivers/qmimodem/devinfo.c drivers/qmimodem/gprs.c \
+				drivers/qmimodem/gprs-context.c drivers/qmimodem/location-reporting.c \
+				drivers/qmimodem/nas.c drivers/qmimodem/network-registration.c \
+				drivers/qmimodem/qmi.c drivers/qmimodem/qmimodem.c \
+				drivers/qmimodem/radio-settings.c drivers/qmimodem/sim.c \
+				drivers/qmimodem/sim-legacy.c drivers/qmimodem/sms.c \
+				drivers/qmimodem/ussd.c drivers/qmimodem/voicecall.c plugins/gobi.c \
+				drivers/qmimodem/voice_generated.c drivers/qmimodem/voice.c \
+				drivers/qmimodem/netmon.c \
+				plugins/gobidev.c
+			OFONO_PLUGINS += gobidev gobi qmimodem
+		endif
 	endif
 
 	LOCAL_SHARED_LIBRARIES := libglib libdbus libdl liblog
