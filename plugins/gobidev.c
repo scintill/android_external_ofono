@@ -37,10 +37,11 @@
 #include <ofono/plugin.h>
 #include <ofono/modem.h>
 #include <ofono/log.h>
+#include <drivers/qmimodem/qmimodem.h>
 
 static GSList *modem_list;
 
-static int create_gobimodem(const char *devpath, const char *iface_name)
+static int create_gobimodem(const char *devpath, const char *iface_name, int set_rawip)
 {
 	struct ofono_modem *modem;
 	int retval;
@@ -55,6 +56,7 @@ static int create_gobimodem(const char *devpath, const char *iface_name)
 
 	ofono_modem_set_string(modem, "Device", devpath);
 	ofono_modem_set_string(modem, "NetworkInterface", iface_name);
+	ofono_modem_set_boolean(modem, MODEM_PROP_SET_RAWIP, set_rawip);
 
 	/* This causes driver->probe() to be called... */
 	retval = ofono_modem_register(modem);
@@ -88,6 +90,7 @@ static int detect_init(void)
 {
 	const char *gobi_path;
 	const char *iface_name;
+	int set_rawip = 0;
 
 	gobi_path = getenv("OFONO_GOBI_DEVICE");
 	if (gobi_path == NULL)
@@ -97,10 +100,12 @@ static int detect_init(void)
 	if (iface_name == NULL)
 		return 0;
 
+	set_rawip = (getenv("OFONO_GOBI_SET_RAWIP") != NULL);
+
 	ofono_info("GobiDev initializing modem path %s",
 			gobi_path);
 
-	create_gobimodem(gobi_path, iface_name);
+	create_gobimodem(gobi_path, iface_name, set_rawip);
 
 	return 0;
 }
