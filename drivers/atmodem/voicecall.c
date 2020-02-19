@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -265,14 +264,17 @@ poll_again:
 						poll_clcc, vc);
 }
 
+static void send_clcc(struct voicecall_data *vd, struct ofono_voicecall *vc)
+{
+	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix, clcc_poll_cb, vc, NULL);
+}
+
 static gboolean poll_clcc(gpointer user_data)
 {
 	struct ofono_voicecall *vc = user_data;
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-				clcc_poll_cb, vc, NULL);
-
+	send_clcc(vd, vc);
 	vd->clcc_source = 0;
 
 	return FALSE;
@@ -298,8 +300,7 @@ static void generic_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		}
 	}
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, req->vc, NULL);
+	send_clcc(vd, req->vc);
 
 	/* We have to callback after we schedule a poll if required */
 	req->cb(&error, req->data);
@@ -317,8 +318,7 @@ static void release_id_cb(gboolean ok, GAtResult *result,
 	if (ok)
 		vd->local_release = 1 << req->id;
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, req->vc, NULL);
+	send_clcc(vd, req->vc);
 
 	/* We have to callback after we schedule a poll if required */
 	req->cb(&error, req->data);
@@ -963,8 +963,7 @@ static void no_carrier_notify(GAtResult *result, gpointer user_data)
 	struct ofono_voicecall *vc = user_data;
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, vc, NULL);
+	send_clcc(vd, vc);
 }
 
 static void no_answer_notify(GAtResult *result, gpointer user_data)
@@ -972,8 +971,7 @@ static void no_answer_notify(GAtResult *result, gpointer user_data)
 	struct ofono_voicecall *vc = user_data;
 	struct voicecall_data *vd = ofono_voicecall_get_data(vc);
 
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, vc, NULL);
+	send_clcc(vd, vc);
 }
 
 static void busy_notify(GAtResult *result, gpointer user_data)
@@ -985,8 +983,7 @@ static void busy_notify(GAtResult *result, gpointer user_data)
 	 * or UDUB on the other side
 	 * TODO: Handle UDUB or other conditions somehow
 	 */
-	g_at_chat_send(vd->chat, "AT+CLCC", clcc_prefix,
-			clcc_poll_cb, vc, NULL);
+	send_clcc(vd, vc);
 }
 
 static void cssi_notify(GAtResult *result, gpointer user_data)
@@ -1120,6 +1117,7 @@ static int at_voicecall_probe(struct ofono_voicecall *vc, unsigned int vendor,
 
 	switch (vd->vendor) {
 	case OFONO_VENDOR_QUALCOMM_MSM:
+	case OFONO_VENDOR_SIMCOM:
 		g_at_chat_send(vd->chat, "AT+COLP=0", NULL, NULL, NULL, NULL);
 		break;
 	default:
@@ -1154,7 +1152,7 @@ static void at_voicecall_remove(struct ofono_voicecall *vc)
 	g_free(vd);
 }
 
-static struct ofono_voicecall_driver driver = {
+static const struct ofono_voicecall_driver driver = {
 	.name			= "atmodem",
 	.probe			= at_voicecall_probe,
 	.remove			= at_voicecall_remove,

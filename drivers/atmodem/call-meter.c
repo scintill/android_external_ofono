@@ -23,11 +23,11 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <ell/ell.h>
 #include <glib.h>
 
 #include <ofono/log.h>
@@ -234,7 +234,7 @@ static void cpuc_query_cb(gboolean ok,
 	if (g_at_result_iter_next_string(&iter, &currency) != TRUE)
 		goto error;
 
-	strncpy(currency_buf, currency, sizeof(currency_buf));
+	l_strlcpy(currency_buf, currency, sizeof(currency_buf));
 
 	if (g_at_result_iter_next_string(&iter, &ppu) != TRUE)
 		goto error;
@@ -331,7 +331,7 @@ static void at_caoc_remove(struct ofono_call_meter *cm)
 	ofono_call_meter_set_data(cm, NULL);
 }
 
-static struct ofono_call_meter_driver driver = {
+static const struct ofono_call_meter_driver driver = {
 	.name = "atmodem",
 	.probe = at_caoc_probe,
 	.remove = at_caoc_remove,

@@ -222,7 +222,7 @@ static void register_callback(const struct ofono_error *error, void *data)
 	if (error->type == OFONO_ERROR_TYPE_NO_ERROR)
 		reply = dbus_message_new_method_return(netreg->pending);
 	else
-		reply = __ofono_error_failed(netreg->pending);
+		reply = __ofono_error_from_error(error, netreg->pending);
 
 	__ofono_dbus_pending_reply(&netreg->pending, reply);
 
@@ -1351,8 +1351,8 @@ void ofono_netreg_status_notify(struct ofono_netreg *netreg, int status,
 	if (netreg == NULL)
 		return;
 
-	DBG("%s status %d tech %d", __ofono_atom_get_path(netreg->atom),
-							status, tech);
+	DBG("%s status %d tech %d lac %d ci %d",
+	    __ofono_atom_get_path(netreg->atom), status, tech, lac, ci);
 
 	if (netreg->status != status) {
 		struct ofono_modem *modem;
@@ -1406,6 +1406,11 @@ void ofono_netreg_time_notify(struct ofono_netreg *netreg,
 
 	if (info == NULL)
 		return;
+
+	DBG("net time %d-%02d-%02d %02d:%02d:%02d utcoff %d dst %d",
+	    info->year, info->mon, info->mday,
+	    info->hour, info->min, info->sec,
+	    info->utcoff, info->dst);
 
 	__ofono_nettime_info_received(modem, info);
 }

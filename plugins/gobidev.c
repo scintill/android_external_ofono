@@ -125,4 +125,5 @@ static void detect_exit(void)
 }
 
 OFONO_PLUGIN_DEFINE(gobidev, "udev-less gobi initialization", VERSION,
-		OFONO_PLUGIN_PRIORITY_DEFAULT, detect_init, detect_exit)
+		OFONO_PLUGIN_PRIORITY_LOW/* so that the gobi driver will be initialized first*/,
+		detect_init, detect_exit)

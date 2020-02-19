@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
@@ -33,6 +32,9 @@
 #include <net/if.h>
 #include <errno.h>
 #include <glib.h>
+
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
 
 #include "message.h"
 #include "common.h"

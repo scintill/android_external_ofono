@@ -21,8 +21,7 @@ ltmain.sh
 missing
 stamp-h1
 autom4te.cache
-test-driver
-test-suite.log
+ell
 
 ofono.pc
 include/ofono
@@ -34,7 +33,6 @@ dundee/dundee.service
 
 unit/test-common
 unit/test-util
-unit/test-idmap
 unit/test-sms
 unit/test-sms-root
 unit/test-simutil
@@ -46,8 +44,11 @@ unit/test-rilmodem-cb
 unit/test-rilmodem-cs
 unit/test-rilmodem-gprs
 unit/test-rilmodem-sms
+unit/test-mbim
 unit/test-*.log
 unit/test-*.trs
+test-driver
+test-suite.log
 
 tools/huawei-audio
 tools/auto-enable

@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -256,8 +255,7 @@ static void huawei_gprs_activate_primary(struct ofono_gprs_context *gc,
 {
 	struct gprs_context_data *gcd = ofono_gprs_context_get_data(gc);
 	struct cb_data *cbd = cb_data_new(cb, data);
-	char buf[64];
-	int len;
+	char buf[136];
 
 	/* IPv6 support not implemented */
 	if (ctx->proto != OFONO_GPRS_PROTO_IP)
@@ -266,14 +264,10 @@ static void huawei_gprs_activate_primary(struct ofono_gprs_context *gc,
 	DBG("cid %u", ctx->cid);
 
 	gcd->active_context = ctx->cid;
-
 	cbd->user = gc;
 
-	len = snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\"", ctx->cid);
-
-	if (ctx->apn)
-		snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"",
-				ctx->apn);
+	snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\",\"%s\"",
+			ctx->cid, ctx->apn);
 
 	if (g_at_chat_send(gcd->chat, buf, none_prefix,
 				at_cgdcont_cb, cbd, g_free) > 0)
@@ -339,7 +333,7 @@ static void huawei_gprs_context_remove(struct ofono_gprs_context *gc)
 	g_free(gcd);
 }
 
-static struct ofono_gprs_context_driver driver = {
+static const struct ofono_gprs_context_driver driver = {
 	.name			= "huaweimodem",
 	.probe			= huawei_gprs_context_probe,
 	.remove			= huawei_gprs_context_remove,

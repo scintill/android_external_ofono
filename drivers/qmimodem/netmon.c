@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -90,8 +89,8 @@ static void get_rssi_cb(struct qmi_result *result, void *user_data)
 
 	/* RSSI */
 	rssi = qmi_result_get(result, 0x11, &len);
-	num = GUINT16_FROM_LE(rssi->count);
 	if (rssi) {
+		num = GUINT16_FROM_LE(rssi->count);
 		for (i = 0; i < num; i++) {
 			DBG("RSSI: %hhu on RAT %hhd",
 				rssi->info[i].rssi,
@@ -127,8 +126,8 @@ static void get_rssi_cb(struct qmi_result *result, void *user_data)
 
 	/* Bit error rate */
 	ber = qmi_result_get(result, 0x15, &len);
-	num = GUINT16_FROM_LE(ber->count);
 	if (ber) {
+		num = GUINT16_FROM_LE(ber->count);
 		for (i = 0; i < ber->count; i++) {
 			DBG("Bit error rate: %hu on RAT %hhd",
 				GUINT16_FROM_LE(ber->info[i].rate),
@@ -268,7 +267,7 @@ static void qmi_netmon_remove(struct ofono_netmon *netmon)
 	g_free(nmd);
 }
 
-static struct ofono_netmon_driver driver = {
+static const struct ofono_netmon_driver driver = {
 	.name			= "qmimodem",
 	.probe			= qmi_netmon_probe,
 	.remove			= qmi_netmon_remove,

@@ -23,7 +23,6 @@
 #include <config.h>
 #endif
 
-#define _GNU_SOURCE
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,7 +179,7 @@ static void vcard_printf_number(GString *vcards, const char *number, int type,
 	if ((type == TYPE_INTERNATIONAL) && (number[0] != '+'))
 		intl = "+";
 
-	snprintf(buf, sizeof(buf), "TEL;TYPE=\%s%s:\%s\%s", pref,
+	snprintf(buf, sizeof(buf), "TEL;TYPE=%s%s:%s%s", pref,
 			category_string, intl, number);
 	vcard_printf(vcards, buf, number);
 }
@@ -428,7 +427,6 @@ static void export_phonebook_cb(const struct ofono_error *error, void *data)
 	g_slist_foreach(phonebook->merge_list, print_merged_entry,
 				phonebook->vcards);
 	g_slist_free_full(phonebook->merge_list, destroy_merged_entry);
-	g_slist_free(phonebook->merge_list);
 	phonebook->merge_list = NULL;
 
 	phonebook->storage_index++;

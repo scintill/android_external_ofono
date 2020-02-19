@@ -342,3 +342,31 @@ __wrap_bsearch (const void *__key, const void *__base, size_t __nmemb, size_t __
 
   return NULL;
 }
+
+
+
+/*
+ *
+ *  Copyright (C) 2020 Joey Hewitt <joey@joeyhewitt.com>
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License version 2 as
+ *  published by the Free Software Foundation.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+#include <string.h>
+char *strdupa(const char *str) {
+	size_t len = strlen(str)+1;
+	char *str2 = alloca(len);
+	memcpy(str2, str, len);
+	return str2;
+}
