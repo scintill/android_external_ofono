@@ -7,6 +7,9 @@
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
 
+/* Define to 1 if you have the `explicit_bzero' function. */
+/* #undef HAVE_EXPLICIT_BZERO */
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
@@ -37,9 +40,6 @@
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
 
-/* Define if threading support is required */
-/* #undef NEED_THREADS */
-
 /* Name of package */
 #define PACKAGE "ofono"
 
@@ -50,7 +50,7 @@
 #define PACKAGE_NAME "ofono"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "ofono 1.20"
+#define PACKAGE_STRING "ofono 1.31"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "ofono"
@@ -59,7 +59,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.20"
+#define PACKAGE_VERSION "1.31"
 
 /* Mobile provider database */
 /* #undef PROVIDER_DATABASE */
@@ -71,7 +71,7 @@
 #define STORAGEDIR "/data/misc/radio/ofono/lib/ofono"
 
 /* Version number of package */
-#define VERSION "1.20"
+#define VERSION "1.31"
 
 /* Define to the equivalent of the C99 'restrict' keyword, or to
    nothing if this is not supported.  Do not define if restrict is

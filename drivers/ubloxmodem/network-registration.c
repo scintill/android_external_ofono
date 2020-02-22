@@ -48,7 +48,6 @@
 static const char *none_prefix[] = { NULL };
 static const char *cmer_prefix[] = { "+CMER:", NULL };
 static const char *ureg_prefix[] = { "+UREG:", NULL };
-static const char *creg_prefix[] = { "+CREG:", NULL };
 
 struct netreg_data {
 	struct at_netreg_data at_data;
@@ -249,30 +248,28 @@ static gboolean is_registered(int status)
 		status == NETWORK_REGISTRATION_STATUS_ROAMING;
 }
 
-static void ublox_creg_cb(gboolean ok, GAtResult *result,
-				gpointer user_data)
+static void registration_status_cb(const struct ofono_error *error,
+				   int status, int lac, int ci, int tech,
+				   void *user_data)
 {
 	struct tech_query *tq = user_data;
 	struct netreg_data *nd = ofono_netreg_get_data(tq->netreg);
-	int status;
-	int lac;
-	int ci;
-	int tech;
-
-	nd->updating_status = false;
-
-	if (!ok)
-		return;
-
-	if (at_util_parse_reg(result, "+CREG:", NULL, &status,
-				&lac, &ci, &tech, OFONO_VENDOR_GENERIC) == FALSE)
-		return;
+	struct ofono_netreg *netreg = tq->netreg;
 
 	/* The query provided a tech, use that */
 	if (is_registered(status) && tq->tech != -1)
 		tech = tq->tech;
 
-	ofono_netreg_status_notify(tq->netreg, status, lac, ci, tech);
+	g_free(tq);
+
+	nd->updating_status = false;
+
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
+		DBG("Error during registration status query");
+		return;
+	}
+
+	ofono_netreg_status_notify(netreg, status, lac, ci, tech);
 }
 
 static void ublox_ureg_cb(gboolean ok, GAtResult *result,
@@ -282,7 +279,7 @@ static void ublox_ureg_cb(gboolean ok, GAtResult *result,
 	struct netreg_data *nd = ofono_netreg_get_data(tq->netreg);
 	GAtResultIter iter;
 	gint enabled, state;
-	int tech = tq->tech;
+	int tech = -1;
 
 	nd->updating_status = false;
 
@@ -291,21 +288,23 @@ static void ublox_ureg_cb(gboolean ok, GAtResult *result,
 
 	g_at_result_iter_init(&iter, result);
 
-	if (!g_at_result_iter_next(&iter, "+UREG:"))
-		return;
+	while (g_at_result_iter_next(&iter, "+UREG:")) {
+		if (!g_at_result_iter_next_number(&iter, &enabled))
+			return;
 
-	if (!g_at_result_iter_next_number(&iter, &enabled))
-		return;
+		/* Sometimes we get an unsolicited UREG here, skip it */
+		if (!g_at_result_iter_next_number(&iter, &state))
+			continue;
 
-	if (!g_at_result_iter_next_number(&iter, &state))
-		return;
+		tech = ublox_ureg_state_to_tech(state);
+		break;
+	}
 
-	tech = ublox_ureg_state_to_tech(state);
+error:
 	if (tech < 0)
 		/* No valid UREG status, we have to trust CREG... */
 		tech = tq->tech;
 
-error:
 	ofono_netreg_status_notify(tq->netreg,
 			tq->status, tq->lac, tq->ci, tech);
 }
@@ -334,13 +333,8 @@ static void ureg_notify(GAtResult *result, gpointer user_data)
 	tq->tech = ublox_ureg_state_to_tech(state);
 	tq->netreg = netreg;
 
-	if (g_at_chat_send(nd->at_data.chat, "AT+CREG?", creg_prefix,
-			ublox_creg_cb, tq, g_free) > 0) {
-		nd->updating_status = true;
-		return;
-	}
-
-	g_free(tq);
+	nd->updating_status = true;
+	at_registration_status(netreg, registration_status_cb, tq);
 }
 
 static void creg_notify(GAtResult *result, gpointer user_data)

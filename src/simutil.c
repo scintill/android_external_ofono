@@ -1410,7 +1410,7 @@ gboolean sim_parse_3g_get_response(const unsigned char *data, int len,
 	if (tlv[1] != 0x21)
 		return FALSE;
 
-	switch (tlv[0] & 0x3) {
+	switch (tlv[0] & 0x7) {
 	case 1:	/* Transparent */
 		str = 0x00;
 		break;
@@ -1701,10 +1701,6 @@ gboolean sim_parse_umts_authenticate(const unsigned char *buffer,
 
 		break;
 	case 0xdc:
-		/* 'DC' + '0E' + AUTS(14) = 16 */
-		if (len < 16)
-			goto umts_end;
-
 		/* sync error */
 		if (buffer[1] != 0x0e)
 			goto umts_end;
