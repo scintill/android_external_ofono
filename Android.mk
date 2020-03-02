@@ -67,7 +67,8 @@ include $(CLEAR_VARS)
         src/private-network.c src/radio-settings.c src/sim-auth.c src/sim.c \
         src/simfs.c src/simutil.c src/siri.c src/smsagent.c src/sms.c \
         src/smsutil.c src/stkagent.c src/stk.c src/stkutil.c src/storage.c \
-        src/ussd.c src/util.c src/voicecall.c src/watch.c
+        src/ussd.c src/util.c src/voicecall.c src/watch.c \
+        drivers/qmimodem/voice_generated.c drivers/qmimodem/voice.c drivers/common/call_list.c
 
 	# Android-specific parts that are not in the upstream makefiles
 	LOCAL_SRC_FILES += \
