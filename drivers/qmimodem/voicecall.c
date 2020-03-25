@@ -37,6 +37,7 @@
 #include "qmimodem.h"
 #include "voice.h"
 #include "voice_generated.h"
+#include "csd.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -172,6 +173,13 @@ static int qmi_voicecall_probe(struct ofono_voicecall *vc,
 
 	qmi_service_create(device, QMI_SERVICE_VOICE,
 					create_voice_cb, vc, NULL);
+
+	if (qmi_device_has_service(device, QMI_SERVICE_CSD)) {
+		// TODO unregister too
+		qmi_csd_register(device, ofono_modem_get_path(ofono_voicecall_get_modem(vc)));
+	} else {
+		DBG("no CSD service; not registering CSD API");
+	}
 
 	return 0;
 }
