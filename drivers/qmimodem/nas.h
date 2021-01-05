@@ -161,7 +161,7 @@ struct qmi_nas_3gpp_time {
 	uint8_t hour;
 	uint8_t minute;
 	uint8_t second;
-	uint8_t timezone;
+	int8_t timezone;
 } __attribute__((__packed__));
 
 /* cs_state/ps_state */
