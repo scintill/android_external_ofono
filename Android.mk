@@ -69,7 +69,7 @@ include $(CLEAR_VARS)
         src/smsutil.c src/stkagent.c src/stk.c src/stkutil.c src/storage.c \
         src/ussd.c src/util.c src/voicecall.c src/watch.c \
         drivers/qmimodem/voice_generated.c drivers/qmimodem/voice.c drivers/common/call_list.c \
-        drivers/qmimodem/csd.c
+        drivers/qmimodem/csd.c plugins/nettime.c
 
 	# Android-specific parts that are not in the upstream makefiles
 	LOCAL_SRC_FILES += \
@@ -80,7 +80,8 @@ include $(CLEAR_VARS)
 		-Wl,--wrap=vsyslog -Wl,--wrap=syslog \
 
     # make -f (printf 'printvars:\n\t @echo $(builtin_modules)' | psub) -f Makefile
-	OFONO_PLUGINS := qmimodem gobi gobidev smart_messaging push_notification allowed_apns
+	# If you change this, you may need to rm src/builtin.h and do a clean build.
+	OFONO_PLUGINS := qmimodem gobi gobidev smart_messaging push_notification allowed_apns nettime
 
     # External deps
 	LOCAL_SHARED_LIBRARIES := libglib libdbus libdl liblog
